@@ -43,14 +43,15 @@ if file is not None:
     # Data filtering and replacement
 
     # Replace empty strings with NaN
-    df.replace('', np.nan, inplace=True)
+    df = df.replace('', np.nan)
     df
 
     # Delete rows with missing event/event observed data
-    df.dropna(subset=[eventCol, eventObservedCol], inplace=True)
+    df = df.dropna(subset=[eventCol, eventObservedCol])
     df
 
     # highlight empty cells
+    # TODO: find empty cells and mark locations in an array
     st.dataframe(data=df.style.highlight_null('yellow'))
 
 
@@ -64,6 +65,7 @@ if file is not None:
         st.write(f"{col}: {avg}")
         df[col] = df[col].replace(np.nan, avg)
 
+    # TODO: highlight all cells that had their values replaced by a mean
     df
 
 
@@ -74,11 +76,8 @@ if file is not None:
     st.write("Choose columns to group:")
     groupCols = st.multiselect("Column names", colNames, accept_new_options=False)
 
-    st.write(groupCols)
-
     # Add group columns
     for col in groupCols:
-        st.write(col)
         # if col is age, do age things
         if col == "Age":
             ageGroup = []
@@ -89,7 +88,7 @@ if file is not None:
                     ageGroup.append("50-60")
                 elif item > 60:
                     ageGroup.append(">60")
-            st.write(ageGroup)
+            df["Age_Group"] = ageGroup
         # if col is BMi, do BMI things
         if col == "BMI":
             BMIGroup = []
@@ -100,9 +99,13 @@ if file is not None:
                     BMIGroup.append("18-26")
                 elif item > 26:
                     BMIGroup.append(">26")
-            st.write(BMIGroup)
+            df["BMI_Group"] = BMIGroup
         # if col is smth else, ask user for range
 
+    df
+
     # Drop raw data columns
+    for col in groupCols:
+        df = df.drop(col, axis=1)
 
-
+    df
