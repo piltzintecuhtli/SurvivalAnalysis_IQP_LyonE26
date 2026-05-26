@@ -2,21 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+from dataFilteringFunctions import findMode
+
 file = st.file_uploader("Upload dataset here:", type="csv", accept_multiple_files=False, width="stretch")
 
 # Data reading :
-# • Propose reading the CSV data file using a dialog box to choose the file.
 # • Offer the possibility to choose the CSV data format (formats: UTF8, Latin, ...).
-# • Use the CSV file "survival_data_1000.csv" to test the different functions.
 # • Select the "Time_to_Event" variable and the "Event_Observed" variable.
-# • From the Age variable, create a new variable Age_Group (<50, 50-60, >60).
-# • From the BMI variable, create a new variable BMI_Group (<18, 18-26, >26).
 # • Check that a patient appears only once in the data file. Delete duplicate rows for patients with
 # "Event_Observed=0".
-# Application Functionalities
-# Handling Missing Data.
-# eplace missing data as appropriate (deleting rows, deleting columns, replacing with a mean or median
-# value, etc.).
 
 if file is not None:
     st.write("Uploaded file successfully!")
@@ -29,14 +23,32 @@ if file is not None:
     colNames = list(df)
 
     st.write("Choose the event column:")
-    # TODO: automatically populate with any column named event or time_to_event
-    eventCol = st.selectbox("Column names", colNames, accept_new_options=False)
-    st.write(df[eventCol])
+
+    tte = False
+
+    for col in df:
+        if col == "Time_to_Event":
+            tte = df.columns.get_loc("Time_to_Event")
+    if tte is not False:
+        eventCol = st.selectbox("Column names", colNames, accept_new_options=False, index=tte)
+    else:
+        eventCol = st.selectbox("Column names", colNames, accept_new_options=False)
 
     colNames.remove(eventCol)
 
     st.write("Choose the event observed column")
-    eventObservedCol = st.selectbox("Column names", colNames, accept_new_options=False)
+
+    eo = False
+
+    for col in df:
+        if col == "Event_Observed":
+            eo = df.columns.get_loc("Event_Observed")
+            if eo > len(colNames) - 1:
+                eo = eo - 1
+    if eo is not False:
+        eventObservedCol = st.selectbox("Column names", colNames, accept_new_options=False, index=eo)
+    else:
+        eventObservedCol = st.selectbox("Column names", colNames, accept_new_options=False)
 
     colNames.remove(eventObservedCol)
 
@@ -44,14 +56,13 @@ if file is not None:
 
     # Replace empty strings with NaN
     df = df.replace('', np.nan)
-    df
 
     # Delete rows with missing event/event observed data
     df = df.dropna(subset=[eventCol, eventObservedCol])
-    df
 
     # highlight empty cells
     # TODO: find empty cells and mark locations in an array
+    st.write("Missing data highlighted")
     st.dataframe(data=df.style.highlight_null('yellow'))
 
 
@@ -60,27 +71,52 @@ if file is not None:
     averages = []
 
     for col in df:
-        avg = df[col].mean()
+        if df[col].dtypes is float or df[col].dtypes is int:
+            avg = df[col].mean()
+        else:
+            avg = findMode(df[col])
         averages.append(avg)
-        st.write(f"{col}: {avg}")
         df[col] = df[col].replace(np.nan, avg)
 
     # TODO: highlight all cells that had their values replaced by a mean
-    df
+    # df
 
 
     # Print table with highlighted replaced values
 
     # Ask user for columns to group
-    # TODO: automatically add Age and BMI cols
     st.write("Choose columns to group:")
-    groupCols = st.multiselect("Column names", colNames, accept_new_options=False)
+    # TODO: automatically add Age and BMI cols
+    ageCol = False
+    BMICol = False
+
+    addIndices = []
+
+    for col in df:
+        if col == "Age":
+            ageCol = "Age"
+        if col == "BMI":
+            BMICol = "BMI"
+
+    if ageCol is not False:
+        addIndices.append(ageCol)
+    if BMICol is not False:
+        addIndices.append(BMICol)
+
+    if addIndices: # if there are columns to automatically account for
+        groupCols = st.multiselect("Column names", colNames, accept_new_options=False, default=addIndices)
+    else:
+        groupCols = st.multiselect("Column names", colNames, accept_new_options=False)
 
     # Add group columns
+    groupColsIndices = []
+    groupNames = []
+    groupData = []
     for col in groupCols:
         # if col is age, do age things
         if col == "Age":
             ageGroup = []
+            groupNames.append("Age_Group")
             for item in df[col]:
                 if item < 50:
                     ageGroup.append("<50")
@@ -88,10 +124,12 @@ if file is not None:
                     ageGroup.append("50-60")
                 elif item > 60:
                     ageGroup.append(">60")
-            df["Age_Group"] = ageGroup
-        # if col is BMi, do BMI things
+            groupColsIndices.append(df.columns.get_loc("Age"))
+            groupData.append(ageGroup)
+        # if col is BMI, do BMI things
         if col == "BMI":
             BMIGroup = []
+            groupNames.append("BMI_Group")
             for item in df[col]:
                 if item < 18:
                     BMIGroup.append("<18")
@@ -99,13 +137,15 @@ if file is not None:
                     BMIGroup.append("18-26")
                 elif item > 26:
                     BMIGroup.append(">26")
-            df["BMI_Group"] = BMIGroup
-        # if col is smth else, ask user for range
-
-    df
+            groupColsIndices.append(df.columns.get_loc("BMI"))
+            groupData.append(BMIGroup)
+        # TODO: if col is smth else, ask user for range
 
     # Drop raw data columns
+    # TODO: add columns to a hide list instead
     for col in groupCols:
         df = df.drop(col, axis=1)
+    for i in range(len(groupCols)):
+        df.insert(groupColsIndices[i], groupNames[i], groupData[i])
 
     df
