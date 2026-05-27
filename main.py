@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from lifelines import KaplanMeierFitter
+import altair as alt
+from altair.datasets import data
 
 from dataFilteringFunctions import findMode
 
@@ -149,3 +152,41 @@ if file is not None:
         df.insert(groupColsIndices[i], groupNames[i], groupData[i])
 
     df
+
+    # Survival Analysis with the Kaplan-Meier Method
+    # 1. Estimate the survival probability and the confidence interval using the Kaplan - Meier method.
+    # 2. Display the table of survivor proportions at each time t(t=0, ..., n).
+    # 3. Plot the overall survival curve with its confidence interval.
+    # 4. Compare survival according to a criterion(e.g., sex M / F) by plotting Kaplan - Meier curves for each group
+
+    kmf = KaplanMeierFitter()
+    kmf.fit(df[eventCol], df[eventObservedCol])
+    kmdf = kmf.survival_function_.reset_index()
+
+    confIntervalDf = kmf.confidence_interval_.reset_index()
+
+    line = alt.Chart(kmdf).mark_line().encode(
+        x='timeline',
+        y='KM_estimate'
+    )
+
+    band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
+        opacity=0.3
+    ).encode(
+        x="index",
+        y="KM_estimate_lower_0.95",
+        y2="KM_estimate_upper_0.95"
+    )
+
+    newchart = line + band
+    newchart = newchart.properties(
+        title = "Kaplan-Meier Estimate"
+    ).encode(
+        alt.X().title("Time to Event"),
+        alt.Y().axis(format="%").title("Probability")
+    )
+
+    st.altair_chart(newchart)
+
+    st.write("Table of Survivor Proportions")
+    st.write(kmf.survival_function_)
