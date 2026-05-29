@@ -1,11 +1,9 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from lifelines import KaplanMeierFitter
 import altair as alt
-from altair.datasets import data
 
-from dataFilteringFunctions import findMode
+from dataFilteringFunctions import *
 
 file = st.file_uploader("Upload dataset here:", type="csv", accept_multiple_files=False, width="stretch")
 
@@ -120,6 +118,7 @@ if file is not None:
         if col == "Age":
             ageGroup = []
             groupNames.append("Age_Group")
+            colNames.remove("Age")
             for item in df[col]:
                 if item < 50:
                     ageGroup.append("<50")
@@ -133,6 +132,7 @@ if file is not None:
         if col == "BMI":
             BMIGroup = []
             groupNames.append("BMI_Group")
+            colNames.remove("BMI")
             for item in df[col]:
                 if item < 18:
                     BMIGroup.append("<18")
@@ -150,8 +150,40 @@ if file is not None:
         df = df.drop(col, axis=1)
     for i in range(len(groupCols)):
         df.insert(groupColsIndices[i], groupNames[i], groupData[i])
+        colNames.insert(groupColsIndices[i], groupNames[i])
 
     df
+
+    # Using "with" notation
+    selectedVals = []
+    with st.sidebar:
+        selectedVals = []
+        for col in colNames:
+            options = findUnique(df[col])
+            if col == "Age_Group":
+                options = ["<50", "50-60", ">60"]
+            if col == "Physical_Activity":
+                options = ["Low", "Moderate", "High"]
+            if col == "Comorbidities":
+                options = sorted(options)
+            if col == "BMI_Group":
+                options = ["<18", "18-26", ">26"]
+            selectedVals.append(st.pills(col, options, selection_mode="multi", default=None))
+
+    # df with only filtered rows:
+    filtereddf = df
+    for i in range(len(colNames)):
+        if not selectedVals[i]:
+            selectedVals[i] = findUnique(df.iloc[:, i])
+
+        # get rows with the column's filter
+        filteredData = filtereddf.iloc[:, i].isin(selectedVals[i])
+
+        filtereddf = filtereddf[filteredData]
+        # :)
+
+    st.write("Filtered Data:")
+    filtereddf
 
     # Survival Analysis with the Kaplan-Meier Method
     # 1. Estimate the survival probability and the confidence interval using the Kaplan - Meier method.
@@ -160,7 +192,7 @@ if file is not None:
     # 4. Compare survival according to a criterion(e.g., sex M / F) by plotting Kaplan - Meier curves for each group
 
     kmf = KaplanMeierFitter()
-    kmf.fit(df[eventCol], df[eventObservedCol])
+    kmf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
     kmdf = kmf.survival_function_.reset_index()
 
     confIntervalDf = kmf.confidence_interval_.reset_index()
@@ -190,3 +222,5 @@ if file is not None:
 
     st.write("Table of Survivor Proportions")
     st.write(kmf.survival_function_)
+
+    selectedVals
