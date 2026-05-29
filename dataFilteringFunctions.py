@@ -15,3 +15,10 @@ def findMode(col):
         if valuesCount[i] > valuesCount[modeIndex]:
             modeIndex = i
     return values[modeIndex]
+
+def findUnique(col):
+    vals = []
+    for value in col:
+        if value not in vals and (value is not None or value is not np.nan):
+            vals.append(value)
+    return vals
