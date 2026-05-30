@@ -3,15 +3,13 @@ import pandas as pd
 from lifelines import KaplanMeierFitter
 import altair as alt
 
-from dataFilteringFunctions import *
+from analysisFunctions import *
 
 file = st.file_uploader("Upload dataset here:", type="csv", accept_multiple_files=False, width="stretch")
 
 # Data reading :
 # • Offer the possibility to choose the CSV data format (formats: UTF8, Latin, ...).
-# • Select the "Time_to_Event" variable and the "Event_Observed" variable.
-# • Check that a patient appears only once in the data file. Delete duplicate rows for patients with
-# "Event_Observed=0".
+# • Check that a patient appears only once in the data file. Delete duplicate rows for patients with "Event_Observed=0".
 
 if file is not None:
     st.write("Uploaded file successfully!")
@@ -23,33 +21,13 @@ if file is not None:
     # dataframe column names
     colNames = list(df)
 
-    st.write("Choose the event column:")
-
-    tte = False
-
-    for col in df:
-        if col == "Time_to_Event":
-            tte = df.columns.get_loc("Time_to_Event")
-    if tte is not False:
-        eventCol = st.selectbox("Column names", colNames, accept_new_options=False, index=tte)
-    else:
-        eventCol = st.selectbox("Column names", colNames, accept_new_options=False)
+    st.write("Choose the event column")
+    eventCol = selectWithDefault(df, colNames, "Time_to_Event")
 
     colNames.remove(eventCol)
 
     st.write("Choose the event observed column")
-
-    eo = False
-
-    for col in df:
-        if col == "Event_Observed":
-            eo = df.columns.get_loc("Event_Observed")
-            if eo > len(colNames) - 1:
-                eo = eo - 1
-    if eo is not False:
-        eventObservedCol = st.selectbox("Column names", colNames, accept_new_options=False, index=eo)
-    else:
-        eventObservedCol = st.selectbox("Column names", colNames, accept_new_options=False)
+    eventObservedCol = selectWithDefault(df, colNames, "Event_Observed")
 
     colNames.remove(eventObservedCol)
 
@@ -68,16 +46,7 @@ if file is not None:
 
 
     # Find average of each column and replace missing data with means
-
-    averages = []
-
-    for col in df:
-        if df[col].dtypes is float or df[col].dtypes is int:
-            avg = df[col].mean()
-        else:
-            avg = findMode(df[col])
-        averages.append(avg)
-        df[col] = df[col].replace(np.nan, avg)
+    df = replaceWithAverages(df)
 
     # TODO: highlight all cells that had their values replaced by a mean
     # df
@@ -86,28 +55,7 @@ if file is not None:
     # Print table with highlighted replaced values
 
     # Ask user for columns to group
-    st.write("Choose columns to group:")
-    # TODO: automatically add Age and BMI cols
-    ageCol = False
-    BMICol = False
-
-    addIndices = []
-
-    for col in df:
-        if col == "Age":
-            ageCol = "Age"
-        if col == "BMI":
-            BMICol = "BMI"
-
-    if ageCol is not False:
-        addIndices.append(ageCol)
-    if BMICol is not False:
-        addIndices.append(BMICol)
-
-    if addIndices: # if there are columns to automatically account for
-        groupCols = st.multiselect("Column names", colNames, accept_new_options=False, default=addIndices)
-    else:
-        groupCols = st.multiselect("Column names", colNames, accept_new_options=False)
+    groupCols = selectGroupingsWithDefault(df, colNames)
 
     # Add group columns
     groupColsIndices = []
@@ -145,7 +93,6 @@ if file is not None:
         # TODO: if col is smth else, ask user for range
 
     # Drop raw data columns
-    # TODO: add columns to a hide list instead
     for col in groupCols:
         df = df.drop(col, axis=1)
     for i in range(len(groupCols)):
@@ -154,45 +101,25 @@ if file is not None:
 
     df
 
-    # Using "with" notation
     selectedVals = []
     with st.sidebar:
         selectedVals = []
         for col in colNames:
-            options = findUnique(df[col])
-            if col == "Age_Group":
-                options = ["<50", "50-60", ">60"]
-            if col == "Physical_Activity":
-                options = ["Low", "Moderate", "High"]
-            if col == "Comorbidities":
-                options = sorted(options)
-            if col == "BMI_Group":
-                options = ["<18", "18-26", ">26"]
+            options = orderOptions(df, col)
             selectedVals.append(st.pills(col, options, selection_mode="multi", default=None))
 
-    # df with only filtered rows:
-    filtereddf = df
-    for i in range(len(colNames)):
-        if not selectedVals[i]:
-            selectedVals[i] = findUnique(df.iloc[:, i])
-
-        # get rows with the column's filter
-        filteredData = filtereddf.iloc[:, i].isin(selectedVals[i])
-
-        filtereddf = filtereddf[filteredData]
-        # :)
+    # # df with only filtered rows:
+    filtereddf = filterDataframe(df, selectedVals, colNames)
 
     st.write("Filtered Data:")
     filtereddf
 
     # Survival Analysis with the Kaplan-Meier Method
-    # 1. Estimate the survival probability and the confidence interval using the Kaplan - Meier method.
-    # 2. Display the table of survivor proportions at each time t(t=0, ..., n).
-    # 3. Plot the overall survival curve with its confidence interval.
     # 4. Compare survival according to a criterion(e.g., sex M / F) by plotting Kaplan - Meier curves for each group
 
     kmf = KaplanMeierFitter()
     kmf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
+
     kmdf = kmf.survival_function_.reset_index()
 
     confIntervalDf = kmf.confidence_interval_.reset_index()
@@ -222,5 +149,3 @@ if file is not None:
 
     st.write("Table of Survivor Proportions")
     st.write(kmf.survival_function_)
-
-    selectedVals
