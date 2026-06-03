@@ -5,10 +5,13 @@ import altair as alt
 
 from analysisFunctions import *
 
+colors = ["blue", "red", "yellow", "orange", "green", "purple"]
+
+st.header("Uploading and Parsing Data")
+
 file = st.file_uploader("Upload dataset here:", type="csv", accept_multiple_files=False, width="stretch")
 
 # Data reading :
-# • Offer the possibility to choose the CSV data format (formats: UTF8, Latin, ...).
 # • Check that a patient appears only once in the data file. Delete duplicate rows for patients with "Event_Observed=0".
 
 if file is not None:
@@ -108,14 +111,28 @@ if file is not None:
             options = orderOptions(df, col)
             selectedVals.append(st.pills(col, options, selection_mode="multi", default=None))
 
-    # # df with only filtered rows:
-    filtereddf = filterDataframe(df, selectedVals, colNames)
+    # df with only filtered rows:
+    filters = selectedVals
+    filtereddf = df
+    for i in range(len(colNames)):
+        if not filters[i]:
+            filters[i] = findUnique(df.iloc[:, i])
 
-    st.write("Filtered Data:")
+        # get rows with the column's filter
+        filteredData = filtereddf.iloc[:, i].isin(filters[i])
+
+        # apply filtered data rows to df
+        filtereddf = filtereddf[filteredData]
+        # :)
+
+
+    st.subheader("Filtered Data:")
     filtereddf
 
     # Survival Analysis with the Kaplan-Meier Method
     # 4. Compare survival according to a criterion(e.g., sex M / F) by plotting Kaplan - Meier curves for each group
+
+    st.header("Kaplan-Meier Analysis")
 
     kmf = KaplanMeierFitter()
     kmf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
@@ -142,10 +159,83 @@ if file is not None:
         title = "Kaplan-Meier Estimate"
     ).encode(
         alt.X().title("Time to Event"),
-        alt.Y().axis(format="%").title("Probability")
+        alt.Y().axis(format="%").title("Survival Probability")
     )
 
     st.altair_chart(newchart)
 
-    st.write("Table of Survivor Proportions")
+    st.subheader("Table of Survivor Proportions")
     st.write(kmf.survival_function_)
+
+    st.subheader("Compare by Category")
+    # pick a category
+    category = st.pills("Categories", colNames, selection_mode="single")
+
+    # get all possible values for the chosen category
+    categoryValues = findUnique(df[category])
+
+    # df with only filtered rows:
+    # filters = selectedVals
+    # filtereddf = df
+    # for i in range(len(colNames)):
+    #     if not filters[i]:
+    #         filters[i] = findUnique(df.iloc[:, i])
+    #
+    #     # get rows with the column's filter
+    #     filteredData = filtereddf.iloc[:, i].isin(filters[i])
+    #
+    #     # apply filtered data rows to df
+    #     filtereddf = filtereddf[filteredData]
+    #     # :)
+
+    # filter by category
+    categoryDataframes = []
+    for value in categoryValues:
+        filteredCategory = df[df[category] == value]
+        categoryDataframes.append(filteredCategory)
+        # filteredCategory
+
+
+    # make graphs for all the mini dataframes
+    categoryGraphs = []
+    for i in range(len(categoryDataframes)):
+        df = categoryDataframes[i]
+        kmf = KaplanMeierFitter()
+        kmf.fit(df[eventCol], df[eventObservedCol])
+
+        kmdf = kmf.survival_function_.reset_index()
+
+        confIntervalDf = kmf.confidence_interval_.reset_index()
+
+        line = alt.Chart(kmdf).mark_line().encode(
+            x='timeline',
+            y='KM_estimate'
+        )
+
+        band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
+            opacity=0.3
+        ).encode(
+            x="index",
+            y="KM_estimate_lower_0.95",
+            y2="KM_estimate_upper_0.95"
+        )
+
+        newchart = line + band
+        newchart = newchart.properties(
+            title="Kaplan-Meier Estimate"
+        ).encode(
+            alt.X().title("Time to Event"),
+            alt.Y().axis(format="%").title("Survival Probability"),
+            color = alt.value(colors[i%len(categoryDataframes)])
+        )
+
+        st.altair_chart(newchart)
+
+        categoryGraphs.append(newchart)
+
+    # display all graphs as one big one
+    allGraphs = categoryGraphs[0]
+    for i in range(1, len(categoryGraphs)):
+        allGraphs = allGraphs + categoryGraphs[i]
+
+    st.altair_chart(allGraphs)
