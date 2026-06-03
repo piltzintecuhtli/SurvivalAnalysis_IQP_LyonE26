@@ -7,12 +7,13 @@ def findMode(col):
     values = []
     valuesCount = []
     for value in col:
-        if value in values and (value is not None or value is not np.nan):
-            index = values.index(value)
-            valuesCount[index] += 1
-        else:
-            values.append(value)
-            valuesCount.append(0)
+        if value is not None or value is not np.nan:
+            if value in values:
+                index = values.index(value)
+                valuesCount[index] += 1
+            else:
+                values.append(value)
+                valuesCount.append(0)
     modeIndex = 0
     for i in range(0, len(values)):
         if valuesCount[i] > valuesCount[modeIndex]:
@@ -53,22 +54,6 @@ def replaceWithAverages(df):
         df[col] = df[col].replace(np.nan, avg)
 
     return df
-
-def filterDataframe(df, filters, colNames):
-    # df with only filtered rows:
-    filtereddf = df
-    for i in range(len(colNames)):
-        if not filters[i]:
-            filters[i] = findUnique(df.iloc[:, i])
-
-        # get rows with the column's filter
-        filteredData = filtereddf.iloc[:, i].isin(filters[i])
-
-        # apply filtered data rows to df
-        filtereddf = filtereddf[filteredData]
-        # :)
-
-        return filtereddf
 
 def selectGroupingsWithDefault(df, colNames):
     st.write("Choose columns to group:")
