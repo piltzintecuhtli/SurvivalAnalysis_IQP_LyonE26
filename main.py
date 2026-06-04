@@ -171,71 +171,72 @@ if file is not None:
     # pick a category
     category = st.pills("Categories", colNames, selection_mode="single")
 
-    # get all possible values for the chosen category
-    categoryValues = findUnique(df[category])
+    if category is not None:
+        # get all possible values for the chosen category
+        categoryValues = findUnique(df[category])
 
-    # df with only filtered rows:
-    # filters = selectedVals
-    # filtereddf = df
-    # for i in range(len(colNames)):
-    #     if not filters[i]:
-    #         filters[i] = findUnique(df.iloc[:, i])
-    #
-    #     # get rows with the column's filter
-    #     filteredData = filtereddf.iloc[:, i].isin(filters[i])
-    #
-    #     # apply filtered data rows to df
-    #     filtereddf = filtereddf[filteredData]
-    #     # :)
-
-    # filter by category
-    categoryDataframes = []
-    for value in categoryValues:
-        filteredCategory = df[df[category] == value]
-        categoryDataframes.append(filteredCategory)
-        # filteredCategory
+        # filter by category
+        categoryDataframes = []
+        for value in categoryValues:
+            filteredCategory = df[df[category] == value]
+            categoryDataframes.append(filteredCategory)
 
 
-    # make graphs for all the mini dataframes
-    categoryGraphs = []
-    for i in range(len(categoryDataframes)):
-        df = categoryDataframes[i]
-        kmf = KaplanMeierFitter()
-        kmf.fit(df[eventCol], df[eventObservedCol])
+        # make graphs for all the mini dataframes
+        categoryGraphs = []
+        for i in range(len(categoryDataframes)):
+            df = categoryDataframes[i]
+            kmf = KaplanMeierFitter()
+            kmf.fit(df[eventCol], df[eventObservedCol])
 
-        kmdf = kmf.survival_function_.reset_index()
+            kmdf = kmf.survival_function_.reset_index()
 
-        confIntervalDf = kmf.confidence_interval_.reset_index()
+            confIntervalDf = kmf.confidence_interval_.reset_index()
 
-        line = alt.Chart(kmdf).mark_line().encode(
-            x='timeline',
-            y='KM_estimate'
+            line = alt.Chart(kmdf).mark_line().encode(
+                x='timeline',
+                y='KM_estimate'
+            )
+
+            band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
+                opacity=0.3
+            ).encode(
+                x="index",
+                y="KM_estimate_lower_0.95",
+                y2="KM_estimate_upper_0.95"
+            )
+
+            newchart = line + band
+            newchart = newchart.properties(
+                title="Kaplan-Meier Estimate for " + category
+            ).encode(
+                alt.X().title("Time to Event"),
+                alt.Y().axis(format="%").title("Survival Probability"),
+                color = alt.value(colors[i%len(categoryDataframes)])
+            )
+
+            st.write("KM graph for those with a/an " + category + " of " + str(categoryValues[i]))
+            st.altair_chart(newchart)
+
+            categoryGraphs.append(newchart)
+
+        # display all graphs as one big one
+        allGraphs = categoryGraphs[0]
+        for i in range(1, len(categoryGraphs)):
+            allGraphs = allGraphs + categoryGraphs[i]
+        allGraphs = allGraphs.encode(
         )
 
-        band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
-            opacity=0.3
-        ).encode(
-            x="index",
-            y="KM_estimate_lower_0.95",
-            y2="KM_estimate_upper_0.95"
-        )
+        # Create legend
+        legend = "Legend: "
+        for i in range(len(categoryGraphs)):
+            color = colors[i%len(categoryGraphs)]
+            value = categoryValues[i]
+            combined  = ":" + color + "[" + color + ": " + value + "]"
 
-        newchart = line + band
-        newchart = newchart.properties(
-            title="Kaplan-Meier Estimate"
-        ).encode(
-            alt.X().title("Time to Event"),
-            alt.Y().axis(format="%").title("Survival Probability"),
-            color = alt.value(colors[i%len(categoryDataframes)])
-        )
+            if i is not len(categoryGraphs) - 1:
+                combined = combined + (" | ")
+            legend =  legend + combined
 
-        st.altair_chart(newchart)
-
-        categoryGraphs.append(newchart)
-
-    # display all graphs as one big one
-    allGraphs = categoryGraphs[0]
-    for i in range(1, len(categoryGraphs)):
-        allGraphs = allGraphs + categoryGraphs[i]
-
-    st.altair_chart(allGraphs)
+        st.altair_chart(allGraphs)
+        st.write(legend)
