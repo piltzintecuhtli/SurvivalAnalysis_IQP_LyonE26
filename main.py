@@ -161,8 +161,27 @@ with dataVis:
             )
 
             st.altair_chart(newchart)
+
+            # estimated hazard with user input
+            number = float(st.text_input("Time to estimate: "))
+            units = st.selectbox("Units: ", ["Months", "Years"])
+
+            if (type(number) is int) or (type(number) is float):
+                if units == "Months":
+                    number = number * 4
+                else:
+                    number = number * 52
+
+                num = naf.cumulative_hazard_at_times(number)
+
+                estimated_time = round(num.iloc[0], 2)
+
+                st.write("Cumulative hazard: " + str(estimated_time))
+
+            else:
+                st.write("You have entered a " + str(type(number)) + "Please enter a number for time.")
         else:
-            st.write("Plese reselect filters; the current ones return no results!")
+            st.write("Please reselect filters; the current ones return no results!")
 
 with descStats:
     st.write("In progress")
