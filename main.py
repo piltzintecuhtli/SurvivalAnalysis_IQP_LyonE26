@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from lifelines import KaplanMeierFitter
+from lifelines import NelsonAalenFitter
 import altair as alt
 
 from analysisFunctions import *
@@ -8,9 +9,6 @@ from analysisFunctions import *
 colors = ["blue", "red", "yellow", "orange", "green", "purple"]
 tabs = ["Data Visualization", "Missing Data Treatment", "Descriptive Statistics", "Graphical Representation of Variables", "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model"]
 dataVis, missingData, descStats, graphRep, probsAndCurves, indivPredictions, coxModel = st.tabs(tabs)
-
-with dataVis:
-    st.write("In progress")
 
 with missingData:
     st.header("Uploading and Parsing Data")
@@ -110,6 +108,62 @@ with missingData:
 
         df
 
+selectedVals = []
+if file is not None:
+    with st.sidebar:
+        selectedVals = []
+        for col in colNames:
+            options = orderOptions(df, col)
+            selectedVals.append(st.pills(col, options, selection_mode="multi", default=None))
+
+with dataVis:
+    st.header("Nelson-Aalen (Hazard Function) Estimation")
+    if file is not None:
+        # df with only filtered rows:
+        filters = selectedVals
+        filtereddf = df
+        for i in range(len(colNames)):
+            if not filters[i]:
+                filters[i] = findUnique(df.iloc[:, i])
+
+            # get rows with the column's filter
+            filteredData = filtereddf.iloc[:, i].isin(filters[i])
+
+            # apply filtered data rows to df
+            filtereddf = filtereddf[filteredData]
+            # :)
+
+        if not filtereddf.empty:
+            naf = NelsonAalenFitter()
+            naf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
+
+            nafdf = naf.cumulative_hazard_.reset_index()
+            nafConfIntervaldf = naf.confidence_interval_.reset_index()
+
+            line = alt.Chart(nafdf).mark_line().encode(
+                x='timeline',
+                y='NA_estimate'
+            )
+
+            band = alt.Chart(nafConfIntervaldf).mark_errorband(
+                opacity = 0.3
+            ).encode(
+                x='index',
+                y='NA_estimate_lower_0.95',
+                y2='NA_estimate_upper_0.95'
+            )
+
+            newchart = (line + band).properties(
+                title = "Nelson-Aalen Estimator - Hazard Function"
+            ).encode(
+                alt.X().title("Time since Start Event"),
+                alt.Y().title("Cumulative Hazard")
+            )
+
+            st.altair_chart(newchart)
+        else:
+            st.write("Plese reselect filters; the current ones return no results!")
+
 with descStats:
     st.write("In progress")
 
@@ -120,13 +174,6 @@ with probsAndCurves:
     st.header("Kaplan-Meier Analysis")
 
     if file is not None:
-        selectedVals = []
-        with st.sidebar:
-            selectedVals = []
-            for col in colNames:
-                options = orderOptions(df, col)
-                selectedVals.append(st.pills(col, options, selection_mode="multi", default=None))
-
         # df with only filtered rows:
         filters = selectedVals
         filtereddf = df
@@ -147,113 +194,115 @@ with probsAndCurves:
 
         # Survival Analysis with the Kaplan-Meier Method
         # 4. Compare survival according to a criterion(e.g., sex M / F) by plotting Kaplan - Meier curves for each group
+        if not filtereddf.empty:
+            kmf = KaplanMeierFitter()
+            kmf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
 
-        kmf = KaplanMeierFitter()
-        kmf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
+            kmdf = kmf.survival_function_.reset_index()
 
-        kmdf = kmf.survival_function_.reset_index()
+            confIntervalDf = kmf.confidence_interval_.reset_index()
 
-        confIntervalDf = kmf.confidence_interval_.reset_index()
-
-        line = alt.Chart(kmdf).mark_line().encode(
-            x='timeline',
-            y='KM_estimate'
-        )
-
-        band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
-            opacity=0.3
-        ).encode(
-            x="index",
-            y="KM_estimate_lower_0.95",
-            y2="KM_estimate_upper_0.95"
-        )
-
-        newchart = line + band
-        newchart = newchart.properties(
-            title = "Kaplan-Meier Estimate"
-        ).encode(
-            alt.X().title("Time to Event"),
-            alt.Y().axis(format="%").title("Survival Probability")
-        )
-
-        st.altair_chart(newchart)
-
-        st.subheader("Table of Survivor Proportions")
-        st.write(kmf.survival_function_)
-
-        st.subheader("Compare by Category")
-        # pick a category
-        category = st.pills("Categories", colNames, selection_mode="single")
-
-        if category is not None:
-            # get all possible values for the chosen category
-            categoryValues = findUnique(df[category])
-
-            # filter by category
-            categoryDataframes = []
-            for value in categoryValues:
-                filteredCategory = df[df[category] == value]
-                categoryDataframes.append(filteredCategory)
-
-
-            # make graphs for all the mini dataframes
-            categoryGraphs = []
-            for i in range(len(categoryDataframes)):
-                df = categoryDataframes[i]
-                kmf = KaplanMeierFitter()
-                kmf.fit(df[eventCol], df[eventObservedCol])
-
-                kmdf = kmf.survival_function_.reset_index()
-
-                confIntervalDf = kmf.confidence_interval_.reset_index()
-
-                line = alt.Chart(kmdf).mark_line().encode(
-                    x='timeline',
-                    y='KM_estimate'
-                )
-
-                band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
-                    opacity=0.3
-                ).encode(
-                    x="index",
-                    y="KM_estimate_lower_0.95",
-                    y2="KM_estimate_upper_0.95"
-                )
-
-                newchart = line + band
-                newchart = newchart.properties(
-                    title="Kaplan-Meier Estimate for " + category
-                ).encode(
-                    alt.X().title("Time to Event"),
-                    alt.Y().axis(format="%").title("Survival Probability"),
-                    color = alt.value(colors[i%len(categoryDataframes)])
-                )
-
-                st.write("KM graph for those with a/an " + category + " of " + str(categoryValues[i]))
-                st.altair_chart(newchart)
-
-                categoryGraphs.append(newchart)
-
-            # display all graphs as one big one
-            allGraphs = categoryGraphs[0]
-            for i in range(1, len(categoryGraphs)):
-                allGraphs = allGraphs + categoryGraphs[i]
-            allGraphs = allGraphs.encode(
+            line = alt.Chart(kmdf).mark_line().encode(
+                x='timeline',
+                y='KM_estimate'
             )
 
-            # Create legend
-            legend = "Legend: "
-            for i in range(len(categoryGraphs)):
-                color = colors[i%len(categoryGraphs)]
-                value = categoryValues[i]
-                combined  = ":" + color + "[" + color + ": " + value + "]"
+            band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
+                opacity=0.3
+            ).encode(
+                x="index",
+                y="KM_estimate_lower_0.95",
+                y2="KM_estimate_upper_0.95"
+            )
 
-                if i is not len(categoryGraphs) - 1:
-                    combined = combined + " | "
-                legend =  legend + combined
+            newchart = line + band
+            newchart = newchart.properties(
+                title = "Kaplan-Meier Estimate"
+            ).encode(
+                alt.X().title("Time to Event"),
+                alt.Y().axis(format="%").title("Survival Probability")
+            )
 
-            st.altair_chart(allGraphs)
-            st.write(legend)
+            st.altair_chart(newchart)
+
+            st.subheader("Table of Survivor Proportions")
+            st.write(kmf.survival_function_)
+
+            st.subheader("Compare by Category")
+            # pick a category
+            category = st.pills("Categories", colNames, selection_mode="single")
+
+            if category is not None:
+                # get all possible values for the chosen category
+                categoryValues = findUnique(df[category])
+
+                # filter by category
+                categoryDataframes = []
+                for value in categoryValues:
+                    filteredCategory = df[df[category] == value]
+                    categoryDataframes.append(filteredCategory)
+
+
+                # make graphs for all the mini dataframes
+                categoryGraphs = []
+                for i in range(len(categoryDataframes)):
+                    df = categoryDataframes[i]
+                    kmf = KaplanMeierFitter()
+                    kmf.fit(df[eventCol], df[eventObservedCol])
+
+                    kmdf = kmf.survival_function_.reset_index()
+
+                    confIntervalDf = kmf.confidence_interval_.reset_index()
+
+                    line = alt.Chart(kmdf).mark_line().encode(
+                        x='timeline',
+                        y='KM_estimate'
+                    )
+
+                    band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
+                        opacity=0.3
+                    ).encode(
+                        x="index",
+                        y="KM_estimate_lower_0.95",
+                        y2="KM_estimate_upper_0.95"
+                    )
+
+                    newchart = line + band
+                    newchart = newchart.properties(
+                        title="Kaplan-Meier Estimate for " + category
+                    ).encode(
+                        alt.X().title("Time to Event"),
+                        alt.Y().axis(format="%").title("Survival Probability"),
+                        color = alt.value(colors[i%len(categoryDataframes)])
+                    )
+
+                    st.write("KM graph for those with a/an " + category + " of " + str(categoryValues[i]))
+                    st.altair_chart(newchart)
+
+                    categoryGraphs.append(newchart)
+
+                # display all graphs as one big one
+                allGraphs = categoryGraphs[0]
+                for i in range(1, len(categoryGraphs)):
+                    allGraphs = allGraphs + categoryGraphs[i]
+                allGraphs = allGraphs.encode(
+                )
+
+                # Create legend
+                legend = "Legend: "
+                for i in range(len(categoryGraphs)):
+                    color = colors[i%len(categoryGraphs)]
+                    value = categoryValues[i]
+                    combined  = ":" + color + "[" + color + ": " + value + "]"
+
+                    if i is not len(categoryGraphs) - 1:
+                        combined = combined + " | "
+                    legend =  legend + combined
+
+                st.altair_chart(allGraphs)
+                st.write(legend)
+            else:
+                st.write("Please reselect filters; the current ones return no results!")
         else:
             st.write("Please upload data.")
 
