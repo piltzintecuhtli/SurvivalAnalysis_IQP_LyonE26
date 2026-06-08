@@ -3,12 +3,15 @@ import pandas as pd
 from lifelines import KaplanMeierFitter
 from lifelines import NelsonAalenFitter
 import altair as alt
+from lifelines.statistics import multivariate_logrank_test
 
 from analysisFunctions import *
 
 colors = ["blue", "red", "yellow", "orange", "green", "purple"]
 tabs = ["Data Visualization", "Missing Data Treatment", "Descriptive Statistics", "Graphical Representation of Variables", "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model"]
 dataVis, missingData, descStats, graphRep, probsAndCurves, indivPredictions, coxModel = st.tabs(tabs)
+
+colNames = []
 
 with missingData:
     st.header("Uploading and Parsing Data")
@@ -127,15 +130,6 @@ if file is not None:
         # apply filtered data rows to df
         filtereddf = filtereddf[filteredData]
         # :)
-
-with dataVis:
-    st.write("In progress")
-
-with descStats:
-    st.write("In progress")
-
-with graphRep:
-    st.write("In progress")
 
 with probsAndCurves:
     st.header("Kaplan-Meier Analysis")
@@ -257,6 +251,61 @@ with probsAndCurves:
                 st.write("Please reselect filters; the current ones return no results!")
         else:
             st.write("Please upload data.")
+
+with dataVis:
+    st.header("Log-Rank Analysis")
+    st.subheader("Compare by Category")
+    # pick a category
+    category = st.pills("Categories", colNames, selection_mode="single", key="lr-pills")
+
+    if category is not None:
+        # get all possible values for the chosen category
+        categoryValues = findUnique(df[category])
+
+        # filter by category
+        categoryDataframes = []
+        for value in categoryValues:
+            filteredCategory = df[df[category] == value]
+            categoryDataframes.append(filteredCategory)
+
+        # format data for analysis
+        durations = []
+        events = []
+        group = []
+        for i in range(len(categoryDataframes)):
+            df = categoryDataframes[i]
+            survivalTimes = list(df[eventCol])
+            survivalObserved = list(df[eventObservedCol])
+            groupNum = i
+
+            for j in range(len(survivalTimes)):
+                durations.append(survivalTimes[j])
+                events.append(survivalObserved[j])
+                group.append(groupNum)
+
+        lrdf = pd.DataFrame({
+            'durations': durations,
+            'events': events,
+            'groups': group
+        })
+
+        result = multivariate_logrank_test(lrdf['durations'], lrdf['groups'], lrdf['events'])
+
+        st.write("Test statistic: " + str(result.test_statistic))
+        st.write("p-value: " + str(result.p_value))
+
+        if result.p_value > 0.05:
+            st.write("Null hypothesis is retained; " + category + " does not affect survival time" )
+        else:
+            st.write("Null hypothesis is rejected; " + category + " affect(s) survival time")
+    else:
+        st.write("Please reselect filters; the current ones return no results!")
+
+with descStats:
+    st.write("In progress")
+
+with graphRep:
+    st.write("In progress")
 
 with indivPredictions:
     st.header("Nelson-Aalen (Hazard Function) Estimation")
