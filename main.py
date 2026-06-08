@@ -115,73 +115,21 @@ if file is not None:
         for col in colNames:
             options = orderOptions(df, col)
             selectedVals.append(st.pills(col, options, selection_mode="multi", default=None))
+    # df with only filtered rows:
+    filtereddf = df
+    for i in range(len(colNames)):
+        if not selectedVals[i]:
+            selectedVals[i] = findUnique(df.iloc[:, i])
+
+        # get rows with the column's filter
+        filteredData = filtereddf.iloc[:, i].isin(selectedVals[i])
+
+        # apply filtered data rows to df
+        filtereddf = filtereddf[filteredData]
+        # :)
 
 with dataVis:
-    st.header("Nelson-Aalen (Hazard Function) Estimation")
-    if file is not None:
-        # df with only filtered rows:
-        filters = selectedVals
-        filtereddf = df
-        for i in range(len(colNames)):
-            if not filters[i]:
-                filters[i] = findUnique(df.iloc[:, i])
-
-            # get rows with the column's filter
-            filteredData = filtereddf.iloc[:, i].isin(filters[i])
-
-            # apply filtered data rows to df
-            filtereddf = filtereddf[filteredData]
-            # :)
-
-        if not filtereddf.empty:
-            naf = NelsonAalenFitter()
-            naf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
-
-            nafdf = naf.cumulative_hazard_.reset_index()
-            nafConfIntervaldf = naf.confidence_interval_.reset_index()
-
-            line = alt.Chart(nafdf).mark_line().encode(
-                x='timeline',
-                y='NA_estimate'
-            )
-
-            band = alt.Chart(nafConfIntervaldf).mark_errorband(
-                opacity = 0.3
-            ).encode(
-                x='index',
-                y='NA_estimate_lower_0.95',
-                y2='NA_estimate_upper_0.95'
-            )
-
-            newchart = (line + band).properties(
-                title = "Nelson-Aalen Estimator - Hazard Function"
-            ).encode(
-                alt.X().title("Time since Start Event"),
-                alt.Y().title("Cumulative Hazard")
-            )
-
-            st.altair_chart(newchart)
-
-            # estimated hazard with user input
-            number = float(st.text_input("Time to estimate: "))
-            units = st.selectbox("Units: ", ["Months", "Years"])
-
-            if (type(number) is int) or (type(number) is float):
-                if units == "Months":
-                    number = number * 4
-                else:
-                    number = number * 52
-
-                num = naf.cumulative_hazard_at_times(number)
-
-                estimated_time = round(num.iloc[0], 2)
-
-                st.write("Cumulative hazard: " + str(estimated_time))
-
-            else:
-                st.write("You have entered a " + str(type(number)) + "Please enter a number for time.")
-        else:
-            st.write("Please reselect filters; the current ones return no results!")
+    st.write("In progress")
 
 with descStats:
     st.write("In progress")
@@ -193,21 +141,6 @@ with probsAndCurves:
     st.header("Kaplan-Meier Analysis")
 
     if file is not None:
-        # df with only filtered rows:
-        filters = selectedVals
-        filtereddf = df
-        for i in range(len(colNames)):
-            if not filters[i]:
-                filters[i] = findUnique(df.iloc[:, i])
-
-            # get rows with the column's filter
-            filteredData = filtereddf.iloc[:, i].isin(filters[i])
-
-            # apply filtered data rows to df
-            filtereddf = filtereddf[filteredData]
-            # :)
-
-
         st.subheader("Filtered Data:")
         filtereddf
 
@@ -312,7 +245,7 @@ with probsAndCurves:
                 for i in range(len(categoryGraphs)):
                     color = colors[i%len(categoryGraphs)]
                     value = categoryValues[i]
-                    combined  = ":" + color + "[" + color + ": " + value + "]"
+                    combined  = ":" + color + "[" + color + ": " + str(value) + "]"
 
                     if i is not len(categoryGraphs) - 1:
                         combined = combined + " | "
@@ -326,7 +259,61 @@ with probsAndCurves:
             st.write("Please upload data.")
 
 with indivPredictions:
-    st.write("In progress")
+    st.header("Nelson-Aalen (Hazard Function) Estimation")
+    if file is not None:
+        if not filtereddf.empty:
+            naf = NelsonAalenFitter()
+            naf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
+
+            nafdf = naf.cumulative_hazard_.reset_index()
+            nafConfIntervaldf = naf.confidence_interval_.reset_index()
+
+            line = alt.Chart(nafdf).mark_line().encode(
+                x='timeline',
+                y='NA_estimate'
+            )
+
+            band = alt.Chart(nafConfIntervaldf).mark_errorband(
+                opacity=0.3
+            ).encode(
+                x='index',
+                y='NA_estimate_lower_0.95',
+                y2='NA_estimate_upper_0.95'
+            )
+
+            newchart = (line + band).properties(
+                title="Nelson-Aalen Estimator - Hazard Function"
+            ).encode(
+                alt.X().title("Time since Start Event"),
+                alt.Y().title("Cumulative Hazard")
+            )
+
+            st.altair_chart(newchart)
+
+            # estimated hazard with user input
+            number = st.text_input("Time to estimate: ")
+            if number is None:
+                number = float(number)
+            else:
+                number = 0
+            units = st.selectbox("Units: ", ["Months", "Years"])
+
+            if (type(number) is int) or (type(number) is float):
+                if units == "Months":
+                    number = number * 4
+                else:
+                    number = number * 52
+
+                num = naf.cumulative_hazard_at_times(number)
+
+                estimated_time = round(num.iloc[0], 2)
+
+                st.write("Cumulative hazard: " + str(estimated_time))
+
+            else:
+                st.write("You have entered a " + str(type(number)) + "Please enter a number for time.")
+        else:
+            st.write("Please reselect filters; the current ones return no results!")
 
 with coxModel:
     st.write("In progress")
