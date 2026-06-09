@@ -365,4 +365,4 @@ with indivPredictions:
             st.write("Please reselect filters; the current ones return no results!")
 
 with coxModel:
-    st.write("In progress")
+    st.write("finally working on it")
