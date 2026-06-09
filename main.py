@@ -71,6 +71,7 @@ with missingData:
         groupColsIndices = []
         groupNames = []
         groupData = []
+        dfAll = df.copy(deep=True)
         for col in groupCols:
             # if col is age, do age things
             if col == "Age":
@@ -86,6 +87,7 @@ with missingData:
                         ageGroup.append(">60")
                 groupColsIndices.append(df.columns.get_loc("Age"))
                 groupData.append(ageGroup)
+                dfAll['Age_Group'] = ageGroup
             # if col is BMI, do BMI things
             if col == "BMI":
                 BMIGroup = []
@@ -100,11 +102,13 @@ with missingData:
                         BMIGroup.append(">26")
                 groupColsIndices.append(df.columns.get_loc("BMI"))
                 groupData.append(BMIGroup)
+                dfAll['BMI_Group'] = BMIGroup
             # TODO: if col is smth else, ask user for range
 
         # Drop raw data columns
         for col in groupCols:
             df = df.drop(col, axis=1)
+
         for i in range(len(groupCols)):
             df.insert(groupColsIndices[i], groupNames[i], groupData[i])
             colNames.insert(groupColsIndices[i], groupNames[i])
@@ -302,7 +306,64 @@ with dataVis:
         st.write("Please reselect filters; the current ones return no results!")
 
 with descStats:
-    st.write("In progress")
+    st.header("Descriptive Statistics")
+    st.write("All data:")
+    dfAll
+    if file is not None:
+        st.write("Please choose a column:")
+        category = st.pills("Categories", list(dfAll), selection_mode="single", key="stats-pills")
+
+        if category is not None:
+            col = dfAll[category]
+            if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
+                statsNames = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max", "Range",
+                              "Standard Deviation", "Frequency",
+                              "Variation", "Skewness", "Kurtosis"]
+                # mean
+                mean = col.mean()
+                # median
+                median = col.median()
+                # mode
+                mode = float(col.mode().iloc[0])
+                # min
+                min = float(col.min())
+                # 25th precentile
+                percentile1 = col.quantile(0.25)
+                # 75th percentile
+                percentile2 = col.quantile(0.75)
+                # max
+                max = float(col.max())
+                # range
+                range = max - min
+                # std
+                std = col.std()
+                # outliers
+                outliers = [100]
+                # frequency
+                frequency = 0
+                # variation?
+                variation = col.var()
+                # skewness?
+                skewness = col.skew()
+                # kurtosis
+                kurtosis = col.kurtosis()
+
+                stats = [mean, median, mode, min, percentile1, percentile2, max, range, std, frequency, variation, skewness, kurtosis]
+                dfStats = pd.DataFrame(data = {'Statistic': statsNames, 'Value': stats})
+
+                st.dataframe(dfStats, hide_index=True, height=((len(statsNames) + 1) * 35 + 3))
+
+                st.write("Outliers: ")
+                dfOutliers = pd.DataFrame(data={'Outliers': outliers})
+                st.dataframe(dfOutliers, hide_index=True, height=((len(outliers) + 1) * 35 + 3))
+
+            else:
+                st.write("data is not a number")
+
+    else:
+        st.write("Please upload a file")
+
+
 
 with graphRep:
     st.write("In progress")
