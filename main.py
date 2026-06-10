@@ -317,8 +317,7 @@ with descStats:
             col = dfAll[category]
             if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
                 statsNames = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max", "Range",
-                              "Standard Deviation", "Frequency",
-                              "Variation", "Skewness", "Kurtosis"]
+                              "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
                 # mean
                 mean = col.mean()
                 # median
@@ -338,9 +337,19 @@ with descStats:
                 # std
                 std = col.std()
                 # outliers
-                outliers = [100]
-                # frequency
-                frequency = 0
+                iqr = percentile2 - percentile1
+                outlierBound1 = percentile1 - (1.5 * iqr)
+                outlierBound2 = percentile2 + (1.5 * iqr)
+                outliers = []
+                index = []
+                i = 0
+                for num in col:
+                    if num < outlierBound1 or num > outlierBound2:
+                        index.append(i)
+                        outliers.append(num)
+                    i += 1
+                outliers = sorted(outliers)
+
                 # variation?
                 variation = col.var()
                 # skewness?
@@ -348,14 +357,14 @@ with descStats:
                 # kurtosis
                 kurtosis = col.kurtosis()
 
-                stats = [mean, median, mode, min, percentile1, percentile2, max, range, std, frequency, variation, skewness, kurtosis]
+                stats = [mean, median, mode, min, percentile1, percentile2, max, range, std, variation, skewness, kurtosis]
                 dfStats = pd.DataFrame(data = {'Statistic': statsNames, 'Value': stats})
 
                 st.dataframe(dfStats, hide_index=True, height=((len(statsNames) + 1) * 35 + 3))
 
                 st.write("Outliers: ")
-                dfOutliers = pd.DataFrame(data={'Outliers': outliers})
-                st.dataframe(dfOutliers, hide_index=True, height=((len(outliers) + 1) * 35 + 3))
+                dfOutliers = pd.DataFrame(data={'Outliers': outliers}, index=index)
+                st.dataframe(dfOutliers, hide_index=True)
 
             else:
                 st.write("data is not a number")
