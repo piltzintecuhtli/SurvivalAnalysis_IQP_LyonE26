@@ -307,9 +307,9 @@ with dataVis:
 
 with descStats:
     st.header("Descriptive Statistics")
-    st.write("All data:")
-    dfAll
     if file is not None:
+        st.write("All data:")
+        dfAll
         st.write("Please choose a column:")
         category = st.pills("Categories", list(dfAll), selection_mode="single", key="stats-pills")
 
@@ -367,8 +367,23 @@ with descStats:
                 st.dataframe(dfOutliers, hide_index=True)
 
             else:
-                st.write("data is not a number")
+                unique = findUnique(col)
+                counts = [] # = frequency
+                total = len(col)
 
+                for data in unique:
+                    counts.append(0)
+
+                for data in col:
+                    index = unique.index(data)
+                    counts[index] += 1
+
+                percentages = []
+                for i in range(len(unique)):
+                    percentages.append(counts[i] / total)
+
+                dfNonNumerical = pd.DataFrame(data = {'Value': unique, 'Frequency': counts, 'Percentage': percentages})
+                st.dataframe(dfNonNumerical, hide_index=True)
     else:
         st.write("Please upload a file")
 
