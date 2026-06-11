@@ -319,11 +319,10 @@ with descStats:
 
         stats = []
 
-        if category is not None:
-            col = dfAll[category]
-            if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
-                statsNames = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max", "Range",
-                              "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
+        for cat in dfAll:
+            stats = []
+            col = dfAll[cat]
+            if dfAll.dtypes[cat] == int or dfAll.dtypes[cat] == float:
                 # mean
                 mean = col.mean()
                 # median
@@ -363,20 +362,14 @@ with descStats:
                 # kurtosis
                 kurtosis = col.kurtosis()
 
-                stats = [mean, median, mode, min, percentile1, percentile2, max, range, std, variation, skewness, kurtosis]
-                dfStats = pd.DataFrame(data = {'Statistic': statsNames, 'Value': stats})
+                stats.append([mean, median, mode, min, percentile1, percentile2, max, range, std, variation, skewness,
+                         kurtosis])
 
-                st.dataframe(dfStats, hide_index=True, height=((len(statsNames) + 1) * 35 + 3))
+                stats.append([index, outliers])
 
-                st.write("Outliers: ")
-                dfOutliers = pd.DataFrame(data={'Outliers': outliers}, index=index)
-                st.dataframe(dfOutliers, hide_index=True)
-
-                stats.append(outliers)
-
-            st.write("Frequency and Percentages")
+            # frequencies and percentages
             unique = findUnique(col)
-            counts = [] # = frequency
+            counts = []  # = frequency
             total = len(col)
 
             for data in unique:
@@ -394,15 +387,35 @@ with descStats:
             for i in percentages:
                 fancyPercentage.append(str(round(i * 100, 3)) + '%')
 
-            dfNonNumerical = pd.DataFrame(data = {'Value': unique, 'Frequency': counts, 'Percentage': fancyPercentage})
+            stats.append([unique, counts, percentages, fancyPercentage])
+
+            allStats[dfAll.columns.get_loc(cat)] = stats
+
+        if category is not None:
+            col = dfAll[category]
+            substats = allStats[dfAll.columns.get_loc(category)]
+            if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
+                statsNames = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max", "Range",
+                              "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
+
+                dfStats = pd.DataFrame(data = {'Statistic': statsNames, 'Value': substats[0]})
+
+                st.dataframe(dfStats, hide_index=True, height=((len(statsNames) + 1) * 35 + 3))
+
+                st.write("Outliers: ")
+                dfOutliers = pd.DataFrame(data={'Outliers': substats[1][1]}, index=substats[1][0])
+                st.dataframe(dfOutliers, hide_index=True)
+
+                stats.append(outliers)
+
+            st.write("Frequency and Percentages")
+
+            if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
+                dfNonNumerical = pd.DataFrame(data = {'Value': substats[2][0], 'Frequency': substats[2][1], 'Percentage': substats[2][3]})
+            else:
+                dfNonNumerical = pd.DataFrame(data = {'Value': substats[0][0], 'Frequency': substats[0][1], 'Percentage': substats[0][3]})
             dfNonNumerical = dfNonNumerical.sort_values(by=['Value'])
             st.dataframe(dfNonNumerical, hide_index=True)
-
-            stats.append(counts)
-            stats.append(percentages)
-
-            if allStats[dfAll.columns.get_loc(category)] == 0:
-                allStats[dfAll.columns.get_loc(category)] = stats
     else:
         st.write("Please upload a file")
 
