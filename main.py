@@ -12,6 +12,7 @@ tabs = ["Data Visualization", "Missing Data Treatment", "Descriptive Statistics"
 dataVis, missingData, descStats, graphRep, probsAndCurves, indivPredictions, coxModel = st.tabs(tabs)
 
 colNames = []
+allStats = []
 
 with missingData:
     st.header("Uploading and Parsing Data")
@@ -104,6 +105,9 @@ with missingData:
                 groupData.append(BMIGroup)
                 dfAll['BMI_Group'] = BMIGroup
             # TODO: if col is smth else, ask user for range
+
+        for _ in dfAll:
+            allStats.append(0)
 
         # Drop raw data columns
         for col in groupCols:
@@ -313,6 +317,8 @@ with descStats:
         st.write("Please choose a column:")
         category = st.pills("Categories", list(dfAll), selection_mode="single", key="stats-pills")
 
+        stats = []
+
         if category is not None:
             col = dfAll[category]
             if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
@@ -344,7 +350,7 @@ with descStats:
                 index = []
                 i = 0
                 for num in col:
-                    if num < outlierBound1 or num > outlierBound2:
+                    if (num < outlierBound1 or num > outlierBound2) and num not in outliers:
                         index.append(i)
                         outliers.append(num)
                     i += 1
@@ -366,28 +372,39 @@ with descStats:
                 dfOutliers = pd.DataFrame(data={'Outliers': outliers}, index=index)
                 st.dataframe(dfOutliers, hide_index=True)
 
-            else:
-                unique = findUnique(col)
-                counts = [] # = frequency
-                total = len(col)
+                stats.append(outliers)
 
-                for data in unique:
-                    counts.append(0)
+            st.write("Frequency and Percentages")
+            unique = findUnique(col)
+            counts = [] # = frequency
+            total = len(col)
 
-                for data in col:
-                    index = unique.index(data)
-                    counts[index] += 1
+            for data in unique:
+                counts.append(0)
 
-                percentages = []
-                for i in range(len(unique)):
-                    percentages.append(counts[i] / total)
+            for data in col:
+                index = unique.index(data)
+                counts[index] += 1
 
-                dfNonNumerical = pd.DataFrame(data = {'Value': unique, 'Frequency': counts, 'Percentage': percentages})
-                st.dataframe(dfNonNumerical, hide_index=True)
+            percentages = []
+            for i in counts:
+                percentages.append(i / total)
+
+            fancyPercentage = []
+            for i in percentages:
+                fancyPercentage.append(str(round(i * 100, 3)) + '%')
+
+            dfNonNumerical = pd.DataFrame(data = {'Value': unique, 'Frequency': counts, 'Percentage': fancyPercentage})
+            dfNonNumerical = dfNonNumerical.sort_values(by=['Value'])
+            st.dataframe(dfNonNumerical, hide_index=True)
+
+            stats.append(counts)
+            stats.append(percentages)
+
+            if allStats[dfAll.columns.get_loc(category)] == 0:
+                allStats[dfAll.columns.get_loc(category)] = stats
     else:
         st.write("Please upload a file")
-
-
 
 with graphRep:
     st.write("In progress")
