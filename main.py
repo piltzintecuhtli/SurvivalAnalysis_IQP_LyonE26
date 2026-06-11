@@ -449,36 +449,40 @@ with indivPredictions:
             newchart = (line + band).properties(
                 title="Nelson-Aalen Estimator - Hazard Function"
             ).encode(
-                alt.X().title("Time since Start Event"),
+                alt.X().title("Time since Start Event (weeks)"),
                 alt.Y().title("Cumulative Hazard")
             )
 
             st.altair_chart(newchart)
 
+            st.subheader("Hazard Calculator")
             # estimated hazard with user input
-            number = st.text_input("Time to estimate: ")
-            if number is None:
-                number = float(number)
+            number = st.text_input("Time to estimate: ", placeholder="0")
+            if number is not None:
+                try:
+                    number = float(number)
+                except ValueError:
+                    st.write("You have entered a " + str(type(number)) + ". Please enter a number for time.")
+                    number = 0
+
             else:
                 number = 0
             units = st.selectbox("Units: ", ["Months", "Years"])
 
-            if (type(number) is int) or (type(number) is float):
-                if units == "Months":
-                    number = number * 4
-                else:
-                    number = number * 52
-
-                num = naf.cumulative_hazard_at_times(number)
-
-                estimated_time = round(num.iloc[0], 2)
-
-                st.write("Cumulative hazard: " + str(estimated_time))
-
+            if units == "Months":
+                number = number * 4
             else:
-                st.write("You have entered a " + str(type(number)) + "Please enter a number for time.")
+                number = number * 52
+
+            num = naf.cumulative_hazard_at_times(number)
+
+            estimated_time = round(num.iloc[0], 3)
+
+            st.write("Cumulative hazard: " + str(estimated_time))
         else:
             st.write("Please reselect filters; the current ones return no results!")
+    else:
+        st.write("Please upload a file")
 
 with coxModel:
     st.write("In progress")
