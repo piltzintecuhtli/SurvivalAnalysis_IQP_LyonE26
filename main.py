@@ -184,16 +184,16 @@ with probsAndCurves:
 
             st.subheader("Compare by Category")
             # pick a category
-            category = st.pills("Categories", colNames, selection_mode="single")
+            cat_km = st.pills("Categories", colNames, selection_mode="single", key="km-pills")
 
-            if category is not None:
+            if cat_km is not None:
                 # get all possible values for the chosen category
-                categoryValues = findUnique(df[category])
+                categoryValues = findUnique(df[cat_km])
 
                 # filter by category
                 categoryDataframes = []
                 for value in categoryValues:
-                    filteredCategory = df[df[category] == value]
+                    filteredCategory = df[df[cat_km] == value]
                     categoryDataframes.append(filteredCategory)
 
 
@@ -223,14 +223,14 @@ with probsAndCurves:
 
                     newchart = line + band
                     newchart = newchart.properties(
-                        title="Kaplan-Meier Estimate for " + category
+                        title="Kaplan-Meier Estimate for " + cat_km
                     ).encode(
                         alt.X().title("Time to Event"),
                         alt.Y().axis(format="%").title("Survival Probability"),
                         color = alt.value(colors[i%len(categoryDataframes)])
                     )
 
-                    st.write("KM graph for those with a/an " + category + " of " + str(categoryValues[i]))
+                    st.write("KM graph for those with a/an " + cat_km + " of " + str(categoryValues[i]))
                     st.altair_chart(newchart)
 
                     categoryGraphs.append(newchart)
@@ -264,16 +264,17 @@ with dataVis:
     st.header("Log-Rank Analysis")
     st.subheader("Compare by Category")
     # pick a category
-    category = st.pills("Categories", colNames, selection_mode="single", key="lr-pills")
+    lr_category = st.pills("Categories", colNames, selection_mode="single", key="lr-pills")
 
-    if category is not None:
+    if lr_category is not None:
+        df_vis = df.copy(deep=True)
         # get all possible values for the chosen category
-        categoryValues = findUnique(df[category])
+        categoryValues = findUnique(df_vis[lr_category])
 
         # filter by category
         categoryDataframes = []
         for value in categoryValues:
-            filteredCategory = df[df[category] == value]
+            filteredCategory = df_vis[df_vis[lr_category] == value]
             categoryDataframes.append(filteredCategory)
 
         # format data for analysis
@@ -299,13 +300,13 @@ with dataVis:
 
         result = multivariate_logrank_test(lrdf['durations'], lrdf['groups'], lrdf['events'])
 
-        st.write("Test statistic: " + str(result.test_statistic))
-        st.write("p-value: " + str(result.p_value))
+        st.write("Test statistic: " + str(round(result.test_statistic, 5)))
+        st.write("p-value: " + str(round(result.p_value, 5)))
 
         if result.p_value > 0.05:
-            st.write("Null hypothesis is retained; " + category + " does not affect survival time" )
+            st.write("Null hypothesis is retained; " + lr_category + " does not affect survival time" )
         else:
-            st.write("Null hypothesis is rejected; " + category + " affect(s) survival time")
+            st.write("Null hypothesis is rejected; " + lr_category + " affect(s) survival time")
     else:
         st.write("Please reselect filters; the current ones return no results!")
 
@@ -355,7 +356,7 @@ with descStats:
                     i += 1
                 outliers = sorted(outliers)
 
-                # variation?
+                # variation
                 variation = col.var()
                 # skewness?
                 skewness = col.skew()
