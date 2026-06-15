@@ -332,15 +332,15 @@ with descStats:
                 # mode
                 mode = float(col.mode().iloc[0])
                 # min
-                min = float(col.min())
+                min_ = float(col.min())
                 # 25th precentile
                 percentile1 = col.quantile(0.25)
                 # 75th percentile
                 percentile2 = col.quantile(0.75)
                 # max
-                max = float(col.max())
+                max_ = float(col.max())
                 # range
-                range = max - min
+                range_ = max_ - min_
                 # std
                 std = col.std()
                 # outliers
@@ -364,7 +364,7 @@ with descStats:
                 # kurtosis
                 kurtosis = col.kurtosis()
 
-                stats.append([mean, median, mode, min, percentile1, percentile2, max, range, std, variation, skewness,
+                stats.append([mean, median, mode, min_, percentile1, percentile2, max_, range_, std, variation, skewness,
                          kurtosis])
 
                 stats.append([index, outliers])
@@ -536,7 +536,7 @@ with coxModel:
 
             if covariates:
                 coxInputCols = covariates + [eventCol, eventObservedCol]
-                coxdf = filtereddf[coxInputCols].copy()
+                coxdf = filtereddf[coxInputCols].copy(deep=True)
 
                 categoricalCols = coxdf[covariates].select_dtypes(exclude='number').columns.tolist()
 
@@ -629,9 +629,9 @@ with coxModel:
                     formKey = "cox_prediction_form_" + "_".join(encodedCovariates).replace("<", "lt").replace(">", "gt").replace("-", "to").replace(" ", "_")
                     with st.form(formKey):
                         patientInput = {}
-                        inputCols = st.columns(min(len(encodedCovariates), 3))
+                        inputCols = st.columns(int(min(len(encodedCovariates), 3)))
                         for i, cov in enumerate(encodedCovariates):
-                            with inputCols[i % min(len(encodedCovariates), 3)]:
+                            with inputCols[i % int(min(len(encodedCovariates), 3))]:
                                 uniqueVals = sorted(coxdf[cov].unique())
                                 if cov == "Comorbidities":
                                     patientInput[cov] = float(st.selectbox(
