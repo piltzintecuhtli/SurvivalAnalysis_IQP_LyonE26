@@ -4,6 +4,7 @@ from lifelines import KaplanMeierFitter
 from lifelines import NelsonAalenFitter
 import altair as alt
 from lifelines.statistics import multivariate_logrank_test
+from altair.datasets import data as altairdata
 
 from analysisFunctions import *
 
@@ -421,7 +422,46 @@ with descStats:
         st.write("Please upload a file")
 
 with graphRep:
-    st.write("In progress")
+    st.header("Graphical Representation of Variables")
+    if file is not None:
+        st.write("Please choose a column:")
+        category_gr = st.pills("Categories", list(dfAll), selection_mode="single", key="graphrep-pills")
+
+        stats = []
+
+        if category_gr is not None:
+            substats = allStats[dfAll.columns.get_loc(category_gr)]
+            col = dfAll[category_gr]
+            st.subheader("Distribution of Values")
+            if dfAll.dtypes[category_gr] == int or dfAll.dtypes[category_gr] == float:
+                # box and whisker plot
+                st.write("Box Plot Representation")
+                chart = alt.Chart(dfAll).mark_boxplot(extent="min-max").encode(
+                    alt.X(str(category_gr)).scale(zero=False)
+                )
+                st.altair_chart(chart, height=40, theme=None)
+            # bar graph
+            st.write("Bar Chart Representation")
+            values = col
+            x, counts = np.unique(values, return_counts=True)
+            df_count = pd.DataFrame({str(category_gr): x, "Count": counts})
+            df_count = df_count.sort_values(by=[str(category_gr)])
+
+            if dfAll.dtypes[category_gr] == int or dfAll.dtypes[category_gr] == float:
+                bar_str = str(category_gr) + ":Q"
+                barGraph = alt.Chart(df_count).mark_bar().encode(
+                    x=bar_str,
+                    y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
+                )
+            else:
+                bar_str = str(category_gr) + ":N"
+                barGraph = alt.Chart(df_count).mark_bar().encode(
+                    x=bar_str,
+                    y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
+                )
+            st.altair_chart(barGraph)
+    else:
+        st.write("Please upload a file")
 
 with indivPredictions:
     st.header("Nelson-Aalen (Hazard Function) Estimation")
