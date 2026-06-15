@@ -4,7 +4,7 @@ from lifelines import KaplanMeierFitter
 from lifelines import NelsonAalenFitter
 import altair as alt
 from lifelines.statistics import multivariate_logrank_test
-from altair.datasets import data as altairdata
+from lifelines import CoxPHFitter
 
 from analysisFunctions import *
 
@@ -525,4 +525,201 @@ with indivPredictions:
         st.write("Please upload a file")
 
 with coxModel:
-    st.write("In progress")
+    st.header("Cox Proportional Hazards Regression")
+
+    if file is not None:
+        if not filtereddf.empty:
+
+            st.subheader("Model Configuration")
+            st.write("Select covariates to include in the Cox model")
+            covariates = st.pills("Covariates", colNames, selection_mode="multi", key="cox-covariates")
+
+            if covariates:
+                coxInputCols = covariates + [eventCol, eventObservedCol]
+                coxdf = filtereddf[coxInputCols].copy()
+
+                categoricalCols = coxdf[covariates].select_dtypes(exclude='number').columns.tolist()
+
+                # treat Comorbidities as numeric if present
+                if "Comorbidities" in categoricalCols:
+                    coxdf["Comorbidities"] = pd.to_numeric(coxdf["Comorbidities"], errors='coerce')
+                    categoricalCols.remove("Comorbidities")
+
+                if categoricalCols:
+                    coxdf = pd.get_dummies(coxdf, columns=categoricalCols, drop_first=True)
+
+                encodedCovariates = [c for c in coxdf.columns if c not in [eventCol, eventObservedCol]]
+
+                cph = CoxPHFitter()
+                try:
+                    cph.fit(coxdf, duration_col=eventCol, event_col=eventObservedCol)
+
+                    # --- Model Summary ---
+                    st.subheader("Model Summary")
+                    summaryDf = cph.summary.copy()
+                    formatCols = {col: "{:.4f}" for col in summaryDf.select_dtypes(include='number').columns}
+                    st.dataframe(summaryDf.style.format(formatCols))
+
+                    st.write("Concordance Index: " + str(round(cph.concordance_index_, 4)))
+
+                    # --- Significance of Covariates ---
+                    st.subheader("Significance of Covariates")
+                    for covariate in cph.summary.index:
+                        pval = cph.summary.loc[covariate, "p"]
+                        hr = cph.summary.loc[covariate, "exp(coef)"]
+                        if pval <= 0.05:
+                            st.write(
+                                f"**{covariate}** is statistically significant (p={round(pval, 4)}), "
+                                f"with a hazard ratio of {round(hr, 4)}."
+                            )
+                        else:
+                            st.write(
+                                f"**{covariate}** is not statistically significant (p={round(pval, 4)})."
+                            )
+
+                    # --- Log Hazard Ratio Plot ---
+                    st.subheader("Log Hazard Ratio Plot")
+                    coxSummary = cph.summary[["coef", "coef lower 95%", "coef upper 95%"]].reset_index()
+                    coxSummary.columns = ["covariate", "coef", "lower", "upper"]
+                    coxSummary["direction"] = coxSummary["coef"].apply(lambda x: "Positive" if x > 0 else "Negative")
+
+                    points = alt.Chart(coxSummary).mark_point(filled=True, size=80).encode(
+                        x=alt.X("coef:Q", title="Log Hazard Ratio"),
+                        y=alt.Y("covariate:N", title="Covariate"),
+                        color=alt.Color("direction:N", scale=alt.Scale(
+                            domain=["Positive", "Negative"],
+                            range=["red", "blue"]
+                        ))
+                    )
+
+                    errorbars = alt.Chart(coxSummary).mark_errorbar().encode(
+                        x=alt.X("lower:Q", title="Log Hazard Ratio"),
+                        x2="upper:Q",
+                        y=alt.Y("covariate:N", title="Covariate")
+                    )
+
+                    rule = alt.Chart(pd.DataFrame({"x": [0]})).mark_rule(
+                        strokeDash=[4, 4], color="gray"
+                    ).encode(x="x:Q")
+
+                    forestPlot = (errorbars + points + rule).properties(
+                        title="Forest Plot - Log Hazard Ratio with 95% CI"
+                    )
+
+                    st.altair_chart(forestPlot, width='stretch')
+
+                    # --- Baseline Survival Function ---
+                    st.subheader("Baseline Survival Function")
+                    baselinedf = cph.baseline_survival_.reset_index()
+                    baselinedf.columns = ["timeline", "baseline_survival"]
+
+                    baselineLine = alt.Chart(baselinedf).mark_line(color="blue").encode(
+                        x=alt.X("timeline:Q", title="Time to Event"),
+                        y=alt.Y("baseline_survival:Q", title="Survival Probability", scale=alt.Scale(domain=[0, 1]))
+                    ).properties(
+                        title="Cox Model — Baseline Survival Function"
+                    )
+
+                    st.altair_chart(baselineLine, width='stretch')
+
+                    # --- Individual Survival Prediction ---
+                    st.subheader("Individual Survival Prediction")
+                    st.write("Enter covariate values to predict survival for a specific patient profile:")
+
+                    formKey = "cox_prediction_form_" + "_".join(encodedCovariates).replace("<", "lt").replace(">", "gt").replace("-", "to").replace(" ", "_")
+                    with st.form(formKey):
+                        patientInput = {}
+                        inputCols = st.columns(min(len(encodedCovariates), 3))
+                        for i, cov in enumerate(encodedCovariates):
+                            with inputCols[i % min(len(encodedCovariates), 3)]:
+                                uniqueVals = sorted(coxdf[cov].unique())
+                                if cov == "Comorbidities":
+                                    patientInput[cov] = float(st.selectbox(
+                                        cov, options=[0, 1, 2, 3, 4, 5]
+                                    ))
+                                elif set(uniqueVals).issubset({0, 1, 0.0, 1.0}):
+                                    selection = st.selectbox(cov, options=["No", "Yes"])
+                                    patientInput[cov] = 1.0 if selection == "Yes" else 0.0
+                                else:
+                                    patientInput[cov] = st.number_input(
+                                        cov, value=float(coxdf[cov].mean())
+                                    )
+                        submitted = st.form_submit_button("Predict")
+
+                    if submitted:
+                        try:
+                            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                            patientDf = pd.DataFrame([patientInput])
+                            survivalPred = cph.predict_survival_function(patientDf)
+
+                            predDf = pd.DataFrame({
+                                "timeline": survivalPred.index.astype(float),
+                                "survival": survivalPred.iloc[:, 0].astype(float).values
+                            }).reset_index(drop=True)
+
+                            # bootstrap confidence intervals
+                            nBootstrap = 50
+
+                            def runBootstrap(_):
+                                try:
+                                    sampleDf = coxdf.sample(n=len(coxdf), replace=True)
+                                    cphBoot = CoxPHFitter()
+                                    cphBoot.fit(sampleDf, duration_col=eventCol, event_col=eventObservedCol)
+                                    bootPred = cphBoot.predict_survival_function(patientDf)
+                                    return bootPred.reindex(survivalPred.index).iloc[:, 0].values
+                                except:
+                                    return None
+
+                            bootstrapPreds = []
+                            with ThreadPoolExecutor(max_workers=4) as executor:
+                                futures = [executor.submit(runBootstrap, i) for i in range(nBootstrap)]
+                                for future in as_completed(futures):
+                                    result = future.result()
+                                    if result is not None:
+                                        bootstrapPreds.append(result)
+
+                            if len(bootstrapPreds) > 0:
+                                bootstrapDf = pd.DataFrame(bootstrapPreds)
+                                predDf["lower"] = bootstrapDf.quantile(0.025).values
+                                predDf["upper"] = bootstrapDf.quantile(0.975).values
+                            else:
+                                predDf["lower"] = predDf["survival"]
+                                predDf["upper"] = predDf["survival"]
+
+                            line = alt.Chart(predDf).mark_line(color="green").encode(
+                                x=alt.X("timeline:Q", title="Time to Event"),
+                                y=alt.Y("survival:Q", title="Survival Probability", scale=alt.Scale(domain=[0, 1]))
+                            )
+
+                            band = alt.Chart(predDf).mark_area(opacity=0.3, color="green").encode(
+                                x=alt.X("timeline:Q", title="Time to Event"),
+                                y=alt.Y("lower:Q", scale=alt.Scale(domain=[0, 1])),
+                                y2=alt.Y2("upper:Q")
+                            )
+
+                            predChart = (band + line).properties(
+                                title="Predicted Survival Curve for Patient Profile with 95% CI"
+                            )
+
+                            st.altair_chart(predChart, width='stretch')
+
+                            medianSurvival = cph.predict_median(patientDf)
+                            if hasattr(medianSurvival, 'iloc'):
+                                medianSurvival = medianSurvival.iloc[0]
+                            st.write("Estimated median survival time: " + str(round(float(medianSurvival), 2)) + " time units")
+
+                        except Exception as e:
+                            st.warning("Could not generate prediction for the selected profile. Please try adjusting the covariate values.")
+
+                except Exception as e:
+                    st.error("Could not fit Cox model: " + str(e))
+                    st.write("This may be due to multicollinearity, insufficient data, or non-numeric covariates that could not be encoded.")
+
+            else:
+                st.write("Please select at least one covariate to fit the Cox model.")
+
+        else:
+            st.write("Please reselect filters; the current ones return no results.")
+    else:
+        st.write("Please upload data.")
