@@ -9,13 +9,13 @@ from lifelines import CoxPHFitter
 from analysisFunctions import *
 
 colors = ["blue", "red", "yellow", "orange", "green", "purple"]
-tabs = ["Data Visualization", "Missing Data Treatment", "Descriptive Statistics", "Graphical Representation of Variables", "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model"]
-dataVis, missingData, descStats, graphRep, probsAndCurves, indivPredictions, coxModel = st.tabs(tabs)
+tabs = ["Missing Data Treatment", "Data Visualization", "Descriptive Statistics", "Graphical Representation of Variables", "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model"]
+missing_data, data_vis, desc_stats, graph_rep, probs_and_curves, indiv_predictions, cox_model = st.tabs(tabs)
 
-colNames = []
-allStats = []
+col_names = []
+all_stats = []
 
-with missingData:
+with missing_data:
     st.header("Uploading and Parsing Data")
 
     file = st.file_uploader("Upload dataset here:", type="csv", accept_multiple_files=False, width="stretch")
@@ -31,17 +31,17 @@ with missingData:
 
         # choose event and event observed columns
         # dataframe column names
-        colNames = list(df)
+        col_names = list(df)
 
         st.write("Choose the event column")
-        eventCol = selectWithDefault(df, colNames, "Time_to_Event")
+        event_col = select_with_default(df, col_names, "Time_to_Event")
 
-        colNames.remove(eventCol)
+        col_names.remove(event_col)
 
         st.write("Choose the event observed column")
-        eventObservedCol = selectWithDefault(df, colNames, "Event_Observed")
+        event_observed_col = select_with_default(df, col_names, "Event_Observed")
 
-        colNames.remove(eventObservedCol)
+        col_names.remove(event_observed_col)
 
         # Data filtering and replacement
 
@@ -49,7 +49,7 @@ with missingData:
         df = df.replace('', np.nan)
 
         # Delete rows with missing event/event observed data
-        df = df.dropna(subset=[eventCol, eventObservedCol])
+        df = df.dropna(subset=[event_col, event_observed_col])
 
         # highlight empty cells
         # TODO: find empty cells and mark locations in an array
@@ -58,7 +58,7 @@ with missingData:
 
 
         # Find average of each column and replace missing data with means
-        df = replaceWithAverages(df)
+        df = replace_with_averages(df)
 
         # TODO: highlight all cells that had their values replaced by a mean
         # df
@@ -67,102 +67,102 @@ with missingData:
         # Print table with highlighted replaced values
 
         # Ask user for columns to group
-        groupCols = selectGroupingsWithDefault(df, colNames)
+        group_cols = select_groupings_with_default(df, col_names)
 
         # Add group columns
-        groupColsIndices = []
-        groupNames = []
-        groupData = []
-        dfAll = df.copy(deep=True)
-        for col in groupCols:
+        group_cols_indices = []
+        group_names = []
+        group_data = []
+        df_all = df.copy(deep=True)
+        for col in group_cols:
             # if col is age, do age things
             if col == "Age":
-                ageGroup = []
-                groupNames.append("Age_Group")
-                colNames.remove("Age")
+                age_group = []
+                group_names.append("Age_Group")
+                col_names.remove("Age")
                 for item in df[col]:
                     if item < 50:
-                        ageGroup.append("<50")
+                        age_group.append("<50")
                     elif 50 <= item <= 60:
-                        ageGroup.append("50-60")
+                        age_group.append("50-60")
                     elif item > 60:
-                        ageGroup.append(">60")
-                groupColsIndices.append(df.columns.get_loc("Age"))
-                groupData.append(ageGroup)
-                dfAll['Age_Group'] = ageGroup
+                        age_group.append(">60")
+                group_cols_indices.append(df.columns.get_loc("Age"))
+                group_data.append(age_group)
+                df_all['Age_Group'] = age_group
             # if col is BMI, do BMI things
             if col == "BMI":
-                BMIGroup = []
-                groupNames.append("BMI_Group")
-                colNames.remove("BMI")
+                bmi_group = []
+                group_names.append("BMI_Group")
+                col_names.remove("BMI")
                 for item in df[col]:
                     if item < 18:
-                        BMIGroup.append("<18")
+                        bmi_group.append("<18")
                     elif 18 <= item <= 26:
-                        BMIGroup.append("18-26")
+                        bmi_group.append("18-26")
                     elif item > 26:
-                        BMIGroup.append(">26")
-                groupColsIndices.append(df.columns.get_loc("BMI"))
-                groupData.append(BMIGroup)
-                dfAll['BMI_Group'] = BMIGroup
+                        bmi_group.append(">26")
+                group_cols_indices.append(df.columns.get_loc("BMI"))
+                group_data.append(bmi_group)
+                df_all['BMI_Group'] = bmi_group
             # TODO: if col is smth else, ask user for range
 
-        for _ in dfAll:
-            allStats.append(0)
+        for _ in df_all:
+            all_stats.append(0)
 
         # Drop raw data columns
-        for col in groupCols:
+        for col in group_cols:
             df = df.drop(col, axis=1)
 
-        for i in range(len(groupCols)):
-            df.insert(groupColsIndices[i], groupNames[i], groupData[i])
-            colNames.insert(groupColsIndices[i], groupNames[i])
+        for i in range(len(group_cols)):
+            df.insert(group_cols_indices[i], group_names[i], group_data[i])
+            col_names.insert(group_cols_indices[i], group_names[i])
 
         df
 
-selectedVals = []
+selected_vals = []
 if file is not None:
     with st.sidebar:
-        selectedVals = []
-        for col in colNames:
-            options = orderOptions(df, col)
-            selectedVals.append(st.pills(col, options, selection_mode="multi", default=None))
+        selected_vals = []
+        for col in col_names:
+            options = order_options(df, col)
+            selected_vals.append(st.pills(col, options, selection_mode="multi", default=None))
     # df with only filtered rows:
-    filtereddf = df
-    for i in range(len(colNames)):
-        if not selectedVals[i]:
-            selectedVals[i] = findUnique(df.iloc[:, i])
+    df_filtered = df
+    for i in range(len(col_names)):
+        if not selected_vals[i]:
+            selected_vals[i] = find_unique(df.iloc[:, i])
 
         # get rows with the column's filter
-        filteredData = filtereddf.iloc[:, i].isin(selectedVals[i])
+        filteredData = df_filtered.iloc[:, i].isin(selected_vals[i])
 
         # apply filtered data rows to df
-        filtereddf = filtereddf[filteredData]
+        df_filtered = df_filtered[filteredData]
         # :)
 
-with probsAndCurves:
+with probs_and_curves:
     st.header("Kaplan-Meier Analysis")
 
     if file is not None:
         st.subheader("Filtered Data:")
-        filtereddf
+        df_filtered
 
         # Survival Analysis with the Kaplan-Meier Method
         # 4. Compare survival according to a criterion(e.g., sex M / F) by plotting Kaplan - Meier curves for each group
-        if not filtereddf.empty:
+        if not df_filtered.empty:
             kmf = KaplanMeierFitter()
-            kmf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
+            kmf.fit(df_filtered[event_col], df_filtered[event_observed_col])
 
             kmdf = kmf.survival_function_.reset_index()
 
-            confIntervalDf = kmf.confidence_interval_.reset_index()
+            df_conf_interval_km = kmf.confidence_interval_.reset_index()
 
             line = alt.Chart(kmdf).mark_line().encode(
                 x='timeline',
                 y='KM_estimate'
             )
 
-            band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
+            band = alt.Chart(df_conf_interval_km.reset_index()).mark_errorband(
                 opacity=0.3
             ).encode(
                 x="index",
@@ -170,51 +170,51 @@ with probsAndCurves:
                 y2="KM_estimate_upper_0.95"
             )
 
-            newchart = line + band
-            newchart = newchart.properties(
+            line_and_band = line + band
+            line_and_band = line_and_band.properties(
                 title = "Kaplan-Meier Estimate"
             ).encode(
                 alt.X().title("Time to Event"),
                 alt.Y().axis(format="%").title("Survival Probability")
             )
 
-            st.altair_chart(newchart)
+            st.altair_chart(line_and_band)
 
             st.subheader("Table of Survivor Proportions")
             st.write(kmf.survival_function_)
 
             st.subheader("Compare by Category")
             # pick a category
-            cat_km = st.pills("Categories", colNames, selection_mode="single", key="km-pills")
+            category_km = st.pills("Categories", col_names, selection_mode="single", key="km-pills")
 
-            if cat_km is not None:
+            if category_km is not None:
                 # get all possible values for the chosen category
-                categoryValues = findUnique(df[cat_km])
+                category_values = find_unique(df[category_km])
 
                 # filter by category
-                categoryDataframes = []
-                for value in categoryValues:
-                    filteredCategory = df[df[cat_km] == value]
-                    categoryDataframes.append(filteredCategory)
+                category_dfss = []
+                for value in category_values:
+                    filtered_category = df[df[category_km] == value]
+                    category_dfss.append(filtered_category)
 
 
                 # make graphs for all the mini dataframes
-                categoryGraphs = []
-                for i in range(len(categoryDataframes)):
-                    df = categoryDataframes[i]
+                category_graphs_km = []
+                for i in range(len(category_dfss)):
+                    df = category_dfss[i]
                     kmf = KaplanMeierFitter()
-                    kmf.fit(df[eventCol], df[eventObservedCol])
+                    kmf.fit(df[event_col], df[event_observed_col])
 
                     kmdf = kmf.survival_function_.reset_index()
 
-                    confIntervalDf = kmf.confidence_interval_.reset_index()
+                    df_conf_interval_km = kmf.confidence_interval_.reset_index()
 
                     line = alt.Chart(kmdf).mark_line().encode(
                         x='timeline',
                         y='KM_estimate'
                     )
 
-                    band = alt.Chart(confIntervalDf.reset_index()).mark_errorband(
+                    band = alt.Chart(df_conf_interval_km.reset_index()).mark_errorband(
                         opacity=0.3
                     ).encode(
                         x="index",
@@ -222,74 +222,74 @@ with probsAndCurves:
                         y2="KM_estimate_upper_0.95"
                     )
 
-                    newchart = line + band
-                    newchart = newchart.properties(
-                        title="Kaplan-Meier Estimate for " + cat_km
+                    line_and_band = line + band
+                    line_and_band = line_and_band.properties(
+                        title="Kaplan-Meier Estimate for " + category_km
                     ).encode(
                         alt.X().title("Time to Event"),
                         alt.Y().axis(format="%").title("Survival Probability"),
-                        color = alt.value(colors[i%len(categoryDataframes)])
+                        color = alt.value(colors[i%len(category_dfss)])
                     )
 
-                    st.write("KM graph for those with a/an " + cat_km + " of " + str(categoryValues[i]))
-                    st.altair_chart(newchart)
+                    st.write("KM graph for those with a/an " + category_km + " of " + str(category_values[i]))
+                    st.altair_chart(line_and_band)
 
-                    categoryGraphs.append(newchart)
+                    category_graphs_km.append(line_and_band)
 
                 # display all graphs as one big one
-                allGraphs = categoryGraphs[0]
-                for i in range(1, len(categoryGraphs)):
-                    allGraphs = allGraphs + categoryGraphs[i]
-                allGraphs = allGraphs.encode(
+                all_graphs_km = category_graphs_km[0]
+                for i in range(1, len(category_graphs_km)):
+                    all_graphs_km = all_graphs_km + category_graphs_km[i]
+                all_graphs_km = all_graphs_km.encode(
                 )
 
                 # Create legend
                 legend = "Legend: "
-                for i in range(len(categoryGraphs)):
-                    color = colors[i%len(categoryGraphs)]
-                    value = categoryValues[i]
+                for i in range(len(category_graphs_km)):
+                    color = colors[i%len(category_graphs_km)]
+                    value = category_values[i]
                     combined  = ":" + color + "[" + color + ": " + str(value) + "]"
 
-                    if i is not len(categoryGraphs) - 1:
+                    if i is not len(category_graphs_km) - 1:
                         combined = combined + " | "
                     legend =  legend + combined
 
-                st.altair_chart(allGraphs)
+                st.altair_chart(all_graphs_km)
                 st.write(legend)
             else:
                 st.write("Please reselect filters; the current ones return no results!")
         else:
             st.write("Please upload data.")
 
-with dataVis:
+with data_vis:
     st.header("Log-Rank Analysis")
     st.subheader("Compare by Category")
     # pick a category
-    lr_category = st.pills("Categories", colNames, selection_mode="single", key="lr-pills")
+    lr_category = st.pills("Categories", col_names, selection_mode="single", key="lr-pills")
 
     if lr_category is not None:
         df_vis = df.copy(deep=True)
         # get all possible values for the chosen category
-        categoryValues = findUnique(df_vis[lr_category])
+        category_values = find_unique(df_vis[lr_category])
 
         # filter by category
-        categoryDataframes = []
-        for value in categoryValues:
-            filteredCategory = df_vis[df_vis[lr_category] == value]
-            categoryDataframes.append(filteredCategory)
+        category_dfs = []
+        for value in category_values:
+            filtered_category = df_vis[df_vis[lr_category] == value]
+            category_dfs.append(filtered_category)
 
         # format data for analysis
         durations = []
         events = []
         group = []
-        for i in range(len(categoryDataframes)):
-            df = categoryDataframes[i]
-            survivalTimes = list(df[eventCol])
-            survivalObserved = list(df[eventObservedCol])
+        for i in range(len(category_dfs)):
+            df = category_dfs[i]
+            survival_times = list(df[event_col])
+            survivalObserved = list(df[event_observed_col])
             groupNum = i
 
-            for j in range(len(survivalTimes)):
-                durations.append(survivalTimes[j])
+            for j in range(len(survival_times)):
+                durations.append(survival_times[j])
                 events.append(survivalObserved[j])
                 group.append(groupNum)
 
@@ -311,20 +311,20 @@ with dataVis:
     else:
         st.write("Please reselect filters; the current ones return no results!")
 
-with descStats:
+with desc_stats:
     st.header("Descriptive Statistics")
     if file is not None:
         st.write("All data:")
-        dfAll
+        df_all
         st.write("Please choose a column:")
-        category = st.pills("Categories", list(dfAll), selection_mode="single", key="stats-pills")
+        category = st.pills("Categories", list(df_all), selection_mode="single", key="stats-pills")
 
         stats = []
 
-        for cat in dfAll:
+        for cat in df_all:
             stats = []
-            col = dfAll[cat]
-            if dfAll.dtypes[cat] == int or dfAll.dtypes[cat] == float:
+            col = df_all[cat]
+            if df_all.dtypes[cat] == int or df_all.dtypes[cat] == float:
                 # mean
                 mean = col.mean()
                 # median
@@ -345,13 +345,13 @@ with descStats:
                 std = col.std()
                 # outliers
                 iqr = percentile2 - percentile1
-                outlierBound1 = percentile1 - (1.5 * iqr)
-                outlierBound2 = percentile2 + (1.5 * iqr)
+                oulier_lower_bound = percentile1 - (1.5 * iqr)
+                oulier_upper_bound = percentile2 + (1.5 * iqr)
                 outliers = []
                 index = []
                 i = 0
                 for num in col:
-                    if (num < outlierBound1 or num > outlierBound2) and num not in outliers:
+                    if (num < oulier_lower_bound or num > oulier_upper_bound) and num not in outliers:
                         index.append(i)
                         outliers.append(num)
                     i += 1
@@ -370,7 +370,7 @@ with descStats:
                 stats.append([index, outliers])
 
             # frequencies and percentages
-            unique = findUnique(col)
+            unique = find_unique(col)
             counts = []  # = frequency
             total = len(col)
 
@@ -385,58 +385,58 @@ with descStats:
             for i in counts:
                 percentages.append(i / total)
 
-            fancyPercentage = []
+            percentage_formatted = []
             for i in percentages:
-                fancyPercentage.append(str(round(i * 100, 3)) + '%')
+                percentage_formatted.append(str(round(i * 100, 3)) + '%')
 
-            stats.append([unique, counts, percentages, fancyPercentage])
+            stats.append([unique, counts, percentages, percentage_formatted])
 
-            allStats[dfAll.columns.get_loc(cat)] = stats
+            all_stats[df_all.columns.get_loc(cat)] = stats
 
         if category is not None:
-            col = dfAll[category]
-            substats = allStats[dfAll.columns.get_loc(category)]
-            if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
-                statsNames = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max", "Range",
+            col = df_all[category]
+            substats = all_stats[df_all.columns.get_loc(category)]
+            if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
+                stats_names = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max", "Range",
                               "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
 
-                dfStats = pd.DataFrame(data = {'Statistic': statsNames, 'Value': substats[0]})
+                dfStats = pd.DataFrame(data = {'Statistic': stats_names, 'Value': substats[0]})
 
-                st.dataframe(dfStats, hide_index=True, height=((len(statsNames) + 1) * 35 + 3))
+                st.dataframe(dfStats, hide_index=True, height=((len(stats_names) + 1) * 35 + 3))
 
                 st.write("Outliers: ")
-                dfOutliers = pd.DataFrame(data={'Outliers': substats[1][1]}, index=substats[1][0])
-                st.dataframe(dfOutliers, hide_index=True)
+                df_outliers = pd.DataFrame(data={'Outliers': substats[1][1]}, index=substats[1][0])
+                st.dataframe(df_outliers, hide_index=True)
 
                 stats.append(outliers)
 
             st.write("Frequency and Percentages")
 
-            if dfAll.dtypes[category] == int or dfAll.dtypes[category] == float:
-                dfNonNumerical = pd.DataFrame(data = {'Value': substats[2][0], 'Frequency': substats[2][1], 'Percentage': substats[2][3]})
+            if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
+                df_non_numerical = pd.DataFrame(data = {'Value': substats[2][0], 'Frequency': substats[2][1], 'Percentage': substats[2][3]})
             else:
-                dfNonNumerical = pd.DataFrame(data = {'Value': substats[0][0], 'Frequency': substats[0][1], 'Percentage': substats[0][3]})
-            dfNonNumerical = dfNonNumerical.sort_values(by=['Value'])
-            st.dataframe(dfNonNumerical, hide_index=True)
+                df_non_numerical = pd.DataFrame(data = {'Value': substats[0][0], 'Frequency': substats[0][1], 'Percentage': substats[0][3]})
+            df_non_numerical = df_non_numerical.sort_values(by=['Value'])
+            st.dataframe(df_non_numerical, hide_index=True)
     else:
         st.write("Please upload a file")
 
-with graphRep:
+with graph_rep:
     st.header("Graphical Representation of Variables")
     if file is not None:
         st.write("Please choose a column:")
-        category_gr = st.pills("Categories", list(dfAll), selection_mode="single", key="graphrep-pills")
+        category_gr = st.pills("Categories", list(df_all), selection_mode="single", key="graphrep-pills")
 
         stats = []
 
         if category_gr is not None:
-            substats = allStats[dfAll.columns.get_loc(category_gr)]
-            col = dfAll[category_gr]
+            substats = all_stats[df_all.columns.get_loc(category_gr)]
+            col = df_all[category_gr]
             st.subheader("Distribution of Values")
-            if dfAll.dtypes[category_gr] == int or dfAll.dtypes[category_gr] == float:
+            if df_all.dtypes[category_gr] == int or df_all.dtypes[category_gr] == float:
                 # box and whisker plot
                 st.write("Box Plot Representation")
-                chart = alt.Chart(dfAll).mark_boxplot(extent="min-max").encode(
+                chart = alt.Chart(df_all).mark_boxplot(extent="min-max").encode(
                     alt.X(str(category_gr)).scale(zero=False)
                 )
                 st.altair_chart(chart, height=40, theme=None)
@@ -447,7 +447,7 @@ with graphRep:
             df_count = pd.DataFrame({str(category_gr): x, "Count": counts})
             df_count = df_count.sort_values(by=[str(category_gr)])
 
-            if dfAll.dtypes[category_gr] == int or dfAll.dtypes[category_gr] == float:
+            if df_all.dtypes[category_gr] == int or df_all.dtypes[category_gr] == float:
                 bar_str = str(category_gr) + ":Q"
                 barGraph = alt.Chart(df_count).mark_bar().encode(
                     x=bar_str,
@@ -463,22 +463,22 @@ with graphRep:
     else:
         st.write("Please upload a file")
 
-with indivPredictions:
+with indiv_predictions:
     st.header("Nelson-Aalen (Hazard Function) Estimation")
     if file is not None:
-        if not filtereddf.empty:
+        if not df_filtered.empty:
             naf = NelsonAalenFitter()
-            naf.fit(filtereddf[eventCol], filtereddf[eventObservedCol])
+            naf.fit(df_filtered[event_col], df_filtered[event_observed_col])
 
-            nafdf = naf.cumulative_hazard_.reset_index()
-            nafConfIntervaldf = naf.confidence_interval_.reset_index()
+            df_naf = naf.cumulative_hazard_.reset_index()
+            df_naf_conf_interval_km = naf.confidence_interval_.reset_index()
 
-            line = alt.Chart(nafdf).mark_line().encode(
+            line = alt.Chart(df_naf).mark_line().encode(
                 x='timeline',
                 y='NA_estimate'
             )
 
-            band = alt.Chart(nafConfIntervaldf).mark_errorband(
+            band = alt.Chart(df_naf_conf_interval_km).mark_errorband(
                 opacity=0.3
             ).encode(
                 x='index',
@@ -486,14 +486,14 @@ with indivPredictions:
                 y2='NA_estimate_upper_0.95'
             )
 
-            newchart = (line + band).properties(
+            line_and_band = (line + band).properties(
                 title="Nelson-Aalen Estimator - Hazard Function"
             ).encode(
                 alt.X().title("Time since Start Event (weeks)"),
                 alt.Y().title("Cumulative Hazard")
             )
 
-            st.altair_chart(newchart)
+            st.altair_chart(line_and_band)
 
             st.subheader("Hazard Calculator")
             # estimated hazard with user input
@@ -524,41 +524,41 @@ with indivPredictions:
     else:
         st.write("Please upload a file")
 
-with coxModel:
+with cox_model:
     st.header("Cox Proportional Hazards Regression")
 
     if file is not None:
-        if not filtereddf.empty:
+        if not df_filtered.empty:
 
             st.subheader("Model Configuration")
             st.write("Select covariates to include in the Cox model")
-            covariates = st.pills("Covariates", colNames, selection_mode="multi", key="cox-covariates")
+            covariates = st.pills("Covariates", col_names, selection_mode="multi", key="cox-covariates")
 
             if covariates:
-                coxInputCols = covariates + [eventCol, eventObservedCol]
-                coxdf = filtereddf[coxInputCols].copy(deep=True)
+                input_cols_cox = covariates + [event_col, event_observed_col]
+                df_cox = df_filtered[input_cols_cox].copy(deep=True)
 
-                categoricalCols = coxdf[covariates].select_dtypes(exclude='number').columns.tolist()
+                categorical_cols = df_cox[covariates].select_dtypes(exclude='number').columns.tolist()
 
                 # treat Comorbidities as numeric if present
-                if "Comorbidities" in categoricalCols:
-                    coxdf["Comorbidities"] = pd.to_numeric(coxdf["Comorbidities"], errors='coerce')
-                    categoricalCols.remove("Comorbidities")
+                if "Comorbidities" in categorical_cols:
+                    df_cox["Comorbidities"] = pd.to_numeric(df_cox["Comorbidities"], errors='coerce')
+                    categorical_cols.remove("Comorbidities")
 
-                if categoricalCols:
-                    coxdf = pd.get_dummies(coxdf, columns=categoricalCols, drop_first=True)
+                if categorical_cols:
+                    df_cox = pd.get_dummies(df_cox, columns=categorical_cols, drop_first=True)
 
-                encodedCovariates = [c for c in coxdf.columns if c not in [eventCol, eventObservedCol]]
+                encoded_covariates = [c for c in df_cox.columns if c not in [event_col, event_observed_col]]
 
                 cph = CoxPHFitter()
                 try:
-                    cph.fit(coxdf, duration_col=eventCol, event_col=eventObservedCol)
+                    cph.fit(df_cox, duration_col=event_col, event_col=event_observed_col)
 
                     # --- Model Summary ---
                     st.subheader("Model Summary")
-                    summaryDf = cph.summary.copy()
-                    formatCols = {col: "{:.4f}" for col in summaryDf.select_dtypes(include='number').columns}
-                    st.dataframe(summaryDf.style.format(formatCols))
+                    df_cox_summary = cph.summary.copy()
+                    formatCols = {col: "{:.4f}" for col in df_cox_summary.select_dtypes(include='number').columns}
+                    st.dataframe(df_cox_summary.style.format(formatCols))
 
                     st.write("Concordance Index: " + str(round(cph.concordance_index_, 4)))
 
@@ -579,11 +579,11 @@ with coxModel:
 
                     # --- Log Hazard Ratio Plot ---
                     st.subheader("Log Hazard Ratio Plot")
-                    coxSummary = cph.summary[["coef", "coef lower 95%", "coef upper 95%"]].reset_index()
-                    coxSummary.columns = ["covariate", "coef", "lower", "upper"]
-                    coxSummary["direction"] = coxSummary["coef"].apply(lambda x: "Positive" if x > 0 else "Negative")
+                    cox_summary = cph.summary[["coef", "coef lower 95%", "coef upper 95%"]].reset_index()
+                    cox_summary.columns = ["covariate", "coef", "lower", "upper"]
+                    cox_summary["direction"] = cox_summary["coef"].apply(lambda x: "Positive" if x > 0 else "Negative")
 
-                    points = alt.Chart(coxSummary).mark_point(filled=True, size=80).encode(
+                    points = alt.Chart(cox_summary).mark_point(filled=True, size=80).encode(
                         x=alt.X("coef:Q", title="Log Hazard Ratio"),
                         y=alt.Y("covariate:N", title="Covariate"),
                         color=alt.Color("direction:N", scale=alt.Scale(
@@ -592,7 +592,7 @@ with coxModel:
                         ))
                     )
 
-                    errorbars = alt.Chart(coxSummary).mark_errorbar().encode(
+                    errorbars = alt.Chart(cox_summary).mark_errorbar().encode(
                         x=alt.X("lower:Q", title="Log Hazard Ratio"),
                         x2="upper:Q",
                         y=alt.Y("covariate:N", title="Covariate")
@@ -610,39 +610,39 @@ with coxModel:
 
                     # --- Baseline Survival Function ---
                     st.subheader("Baseline Survival Function")
-                    baselinedf = cph.baseline_survival_.reset_index()
-                    baselinedf.columns = ["timeline", "baseline_survival"]
+                    df_baseline = cph.baseline_survival_.reset_index()
+                    df_baseline.columns = ["timeline", "baseline_survival"]
 
-                    baselineLine = alt.Chart(baselinedf).mark_line(color="blue").encode(
+                    baseline_line = alt.Chart(df_baseline).mark_line(color="blue").encode(
                         x=alt.X("timeline:Q", title="Time to Event"),
                         y=alt.Y("baseline_survival:Q", title="Survival Probability", scale=alt.Scale(domain=[0, 1]))
                     ).properties(
                         title="Cox Model — Baseline Survival Function"
                     )
 
-                    st.altair_chart(baselineLine, width='stretch')
+                    st.altair_chart(baseline_line, width='stretch')
 
                     # --- Individual Survival Prediction ---
                     st.subheader("Individual Survival Prediction")
                     st.write("Enter covariate values to predict survival for a specific patient profile:")
 
-                    formKey = "cox_prediction_form_" + "_".join(encodedCovariates).replace("<", "lt").replace(">", "gt").replace("-", "to").replace(" ", "_")
-                    with st.form(formKey):
-                        patientInput = {}
-                        inputCols = st.columns(int(min(len(encodedCovariates), 3)))
-                        for i, cov in enumerate(encodedCovariates):
-                            with inputCols[i % int(min(len(encodedCovariates), 3))]:
-                                uniqueVals = sorted(coxdf[cov].unique())
+                    form_key = "cox_prediction_form_" + "_".join(encoded_covariates).replace("<", "lt").replace(">", "gt").replace("-", "to").replace(" ", "_")
+                    with st.form(form_key):
+                        patient_input = {}
+                        input_cols = st.columns(int(min(len(encoded_covariates), 3)))
+                        for i, cov in enumerate(encoded_covariates):
+                            with input_cols[i % int(min(len(encoded_covariates), 3))]:
+                                unique_vals = sorted(df_cox[cov].unique())
                                 if cov == "Comorbidities":
-                                    patientInput[cov] = float(st.selectbox(
+                                    patient_input[cov] = float(st.selectbox(
                                         cov, options=[0, 1, 2, 3, 4, 5]
                                     ))
-                                elif set(uniqueVals).issubset({0, 1, 0.0, 1.0}):
+                                elif set(unique_vals).issubset({0, 1, 0.0, 1.0}):
                                     selection = st.selectbox(cov, options=["No", "Yes"])
-                                    patientInput[cov] = 1.0 if selection == "Yes" else 0.0
+                                    patient_input[cov] = 1.0 if selection == "Yes" else 0.0
                                 else:
-                                    patientInput[cov] = st.number_input(
-                                        cov, value=float(coxdf[cov].mean())
+                                    patient_input[cov] = st.number_input(
+                                        cov, value=float(df_cox[cov].mean())
                                     )
                         submitted = st.form_submit_button("Predict")
 
@@ -650,30 +650,30 @@ with coxModel:
                         try:
                             from concurrent.futures import ThreadPoolExecutor, as_completed
 
-                            patientDf = pd.DataFrame([patientInput])
-                            survivalPred = cph.predict_survival_function(patientDf)
+                            df_patient = pd.DataFrame([patient_input])
+                            survival_prediction = cph.predict_survival_function(df_patient)
 
-                            predDf = pd.DataFrame({
-                                "timeline": survivalPred.index.astype(float),
-                                "survival": survivalPred.iloc[:, 0].astype(float).values
+                            df_prediction = pd.DataFrame({
+                                "timeline": survival_prediction.index.astype(float),
+                                "survival": survival_prediction.iloc[:, 0].astype(float).values
                             }).reset_index(drop=True)
 
                             # bootstrap confidence intervals
                             nBootstrap = 50
 
-                            def runBootstrap(_):
+                            def run_bootstrap(_):
                                 try:
-                                    sampleDf = coxdf.sample(n=len(coxdf), replace=True)
+                                    df_sample = df_cox.sample(n=len(df_cox), replace=True)
                                     cphBoot = CoxPHFitter()
-                                    cphBoot.fit(sampleDf, duration_col=eventCol, event_col=eventObservedCol)
-                                    bootPred = cphBoot.predict_survival_function(patientDf)
-                                    return bootPred.reindex(survivalPred.index).iloc[:, 0].values
+                                    cphBoot.fit(df_sample, duration_col=event_col, event_col=event_observed_col)
+                                    bootPred = cphBoot.predict_survival_function(df_patient)
+                                    return bootPred.reindex(survival_prediction.index).iloc[:, 0].values
                                 except:
                                     return None
 
                             bootstrapPreds = []
                             with ThreadPoolExecutor(max_workers=4) as executor:
-                                futures = [executor.submit(runBootstrap, i) for i in range(nBootstrap)]
+                                futures = [executor.submit(run_bootstrap, i) for i in range(nBootstrap)]
                                 for future in as_completed(futures):
                                     result = future.result()
                                     if result is not None:
@@ -681,18 +681,18 @@ with coxModel:
 
                             if len(bootstrapPreds) > 0:
                                 bootstrapDf = pd.DataFrame(bootstrapPreds)
-                                predDf["lower"] = bootstrapDf.quantile(0.025).values
-                                predDf["upper"] = bootstrapDf.quantile(0.975).values
+                                df_prediction["lower"] = bootstrapDf.quantile(0.025).values
+                                df_prediction["upper"] = bootstrapDf.quantile(0.975).values
                             else:
-                                predDf["lower"] = predDf["survival"]
-                                predDf["upper"] = predDf["survival"]
+                                df_prediction["lower"] = df_prediction["survival"]
+                                df_prediction["upper"] = df_prediction["survival"]
 
-                            line = alt.Chart(predDf).mark_line(color="green").encode(
+                            line = alt.Chart(df_prediction).mark_line(color="green").encode(
                                 x=alt.X("timeline:Q", title="Time to Event"),
                                 y=alt.Y("survival:Q", title="Survival Probability", scale=alt.Scale(domain=[0, 1]))
                             )
 
-                            band = alt.Chart(predDf).mark_area(opacity=0.3, color="green").encode(
+                            band = alt.Chart(df_prediction).mark_area(opacity=0.3, color="green").encode(
                                 x=alt.X("timeline:Q", title="Time to Event"),
                                 y=alt.Y("lower:Q", scale=alt.Scale(domain=[0, 1])),
                                 y2=alt.Y2("upper:Q")
@@ -704,7 +704,7 @@ with coxModel:
 
                             st.altair_chart(predChart, width='stretch')
 
-                            medianSurvival = cph.predict_median(patientDf)
+                            medianSurvival = cph.predict_median(df_patient)
                             if hasattr(medianSurvival, 'iloc'):
                                 medianSurvival = medianSurvival.iloc[0]
                             st.write("Estimated median survival time: " + str(round(float(medianSurvival), 2)) + " time units")

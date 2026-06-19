@@ -3,86 +3,86 @@ import streamlit as st
 from lifelines import KaplanMeierFitter
 import altair as alt
 
-def findMode(col):
+def find_mode(col):
     values = []
-    valuesCount = []
+    values_count = []
     for value in col:
         if value is not None or value is not np.nan:
             if value in values:
                 index = values.index(value)
-                valuesCount[index] += 1
+                values_count[index] += 1
             else:
                 values.append(value)
-                valuesCount.append(0)
+                values_count.append(0)
     modeIndex = 0
     for i in range(0, len(values)):
-        if valuesCount[i] > valuesCount[modeIndex]:
+        if values_count[i] > values_count[modeIndex]:
             modeIndex = i
     return values[modeIndex]
 
-def findUnique(col):
+def find_unique(col):
     vals = []
     for value in col:
         if value not in vals and (value is not None or value is not np.nan):
             vals.append(value)
     return vals
 
-def selectWithDefault(df, colNames, colName):
-    hasCol = False
+def select_with_default(df, col_names, col_name):
+    has_col = False
 
     for col in df:
-        if col == colName:
-            hasCol = df.columns.get_loc(colName)
-            if hasCol > len(colNames) - 1:
-                hasCol = len(colNames) - 1
-    if hasCol is not False:
-        eventCol = st.selectbox("Column names", colNames, accept_new_options=False, index=hasCol)
+        if col == col_name:
+            has_col = df.columns.get_loc(col_name)
+            if has_col > len(col_names) - 1:
+                has_col = len(col_names) - 1
+    if has_col is not False:
+        event_col = st.selectbox("Column names", col_names, accept_new_options=False, index=has_col)
     else:
-        eventCol = st.selectbox("Column names", colNames, accept_new_options=False)
+        event_col = st.selectbox("Column names", col_names, accept_new_options=False)
 
-    return eventCol
+    return event_col
 
-def replaceWithAverages(df):
+def replace_with_averages(df):
     averages = []
 
     for col in df:
         if df[col].dtypes is float or df[col].dtypes is int:
             avg = df[col].mean()
         else:
-            avg = findMode(df[col])
+            avg = find_mode(df[col])
         averages.append(avg)
         df[col] = df[col].replace(np.nan, avg)
 
     return df
 
-def selectGroupingsWithDefault(df, colNames):
+def select_groupings_with_default(df, col_names):
     st.write("Choose columns to group:")
 
-    addIndices = []
+    add_indices = []
 
-    ageCol = False
-    BMICol = False
+    age_col = False
+    bmi_col = False
 
     for col in df:
         if col == "Age":
-            ageCol = "Age"
+            age_col = "Age"
         if col == "BMI":
-            BMICol = "BMI"
+            bmi_col = "BMI"
 
-    if ageCol is not False:
-        addIndices.append(ageCol)
-    if BMICol is not False:
-        addIndices.append(BMICol)
+    if age_col is not False:
+        add_indices.append(age_col)
+    if bmi_col is not False:
+        add_indices.append(bmi_col)
 
-    if addIndices:  # if there are columns to automatically account for
-        groupCols = st.multiselect("Column names", colNames, accept_new_options=False, default=addIndices)
+    if add_indices:  # if there are columns to automatically account for
+        group_cols = st.multiselect("Column names", col_names, accept_new_options=False, default=add_indices)
     else:
-        groupCols = st.multiselect("Column names", colNames, accept_new_options=False)
+        group_cols = st.multiselect("Column names", col_names, accept_new_options=False)
 
-    return groupCols
+    return group_cols
 
-def orderOptions(df, col):
-    options = findUnique(df[col])
+def order_options(df, col):
+    options = find_unique(df[col])
     match col:
         case "Age_Group":
             options = ["<50", "50-60", ">60"]
