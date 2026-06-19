@@ -9,8 +9,8 @@ from lifelines import CoxPHFitter
 from analysisFunctions import *
 
 colors = ["blue", "red", "yellow", "orange", "green", "purple"]
-tabs = ["Data Upload and Visualization", "Missing Data Treatment", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model", "Log-Rank Test"]
-data_vis, missing_data, stats_sum, probs_and_curves, indiv_predictions, cox_model, lr_test = st.tabs(tabs)
+tabs = ["Data Upload and Visualization", "Missing Data Treatment", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Cox Regression Model", "Log-Rank Test"]
+data_vis, missing_data, stats_sum, probs_and_curves, cox_model, lr_test = st.tabs(tabs)
 
 col_names = []
 all_stats = []
@@ -26,6 +26,7 @@ with data_vis:
         st.write("Uploaded file successfully!")
         st.write("Data:")
         df = pd.read_csv(file)
+        df_filtered = df.copy(deep=True)
         st.dataframe(df)
 
 with missing_data:
@@ -586,7 +587,6 @@ with cox_model:
 with lr_test:
     st.header("Log-Rank Test")
     if file is not None:
-        st.header("Log-Rank Analysis")
         st.subheader("Compare by Category")
         # pick a category
         lr_category = st.pills("Categories", col_names, selection_mode="single", key="lr-pills")
@@ -633,6 +633,6 @@ with lr_test:
             else:
                 st.write("Null hypothesis is rejected; " + lr_category + " affect(s) survival time")
         else:
-            st.write("Please select a cateogry!")
+            st.write("Please select a category!")
     else:
         st.write("Please upload data.")
