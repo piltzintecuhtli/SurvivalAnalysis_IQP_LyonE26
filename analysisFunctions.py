@@ -94,3 +94,84 @@ def order_options(df, col):
             options = ["<18", "18-26", ">26"]
 
     return options
+
+def generate_stats(df):
+    all_stats = []
+    
+    for _ in df:
+        all_stats.append(0)
+
+    for cat in df:
+        stats = []
+        col = df[cat]
+        if df.dtypes[cat] == int or df.dtypes[cat] == float:
+            # mean
+            stat_mean = col.mean()
+            # median
+            stat_median = col.median()
+            # mode
+            stat_mode = float(col.mode().iloc[0])
+            # min
+            stat_min = col.min()
+            # 25th precentile
+            stat_percentile1 = col.quantile(0.25)
+            # 75th percentile
+            stat_percentile2 = col.quantile(0.75)
+            # max
+            stat_max = float(col.max())
+            # range
+            stat_range = stat_max - stat_min
+            # std
+            stat_std = col.std()
+            # outliers
+            iqr = stat_percentile2 - stat_percentile1
+            oulier_lower_bound = stat_percentile1 - (1.5 * iqr)
+            oulier_upper_bound = stat_percentile2 + (1.5 * iqr)
+
+            outliers = []
+            index = []
+            i = 0
+            for num in col:
+                if (num < oulier_lower_bound or num > oulier_upper_bound) and num not in outliers:
+                    index.append(i)
+                    outliers.append(num)
+                    i += 1
+            outliers = sorted(outliers)
+
+            # variation
+            stat_variation = col.var()
+            # skewness?
+            stat_skewness = col.skew()
+            # kurtosis
+            stat_kurtosis = col.kurtosis()
+
+            stats.append([stat_mean, stat_median, stat_mode, stat_min, stat_percentile1, stat_percentile2, stat_max,
+                          stat_range, stat_std, stat_variation, stat_skewness, stat_kurtosis])
+
+            stats.append([index, outliers])
+
+        # frequencies and percentages
+        unique = find_unique(col)
+        counts = []  # = frequency
+        total = len(col)
+
+        for _ in unique:
+            counts.append(0)
+
+        for data in col:
+            index = unique.index(data)
+            counts[index] += 1
+
+        percentages = []
+        for i in counts:
+            percentages.append(i / total)
+
+        percentage_formatted = []
+        for i in percentages:
+            percentage_formatted.append(str(round(i * 100, 3)) + '%')
+
+        stats.append([unique, counts, percentages, percentage_formatted])
+
+        all_stats[df.columns.get_loc(cat)] = stats
+
+    return all_stats

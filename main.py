@@ -32,7 +32,6 @@ with missing_data:
     # Data reading :
     # • Check that a patient appears only once in the data file. Delete duplicate rows for patients with "Event_Observed=0".
     if file is not None:
-
         # choose event and event observed columns
         # dataframe column names
         col_names = list(df)
@@ -58,7 +57,9 @@ with missing_data:
         # highlight empty cells
         # TODO: find empty cells and mark locations in an array
         st.write("Missing data highlighted")
-        st.dataframe(data=df.style.highlight_null('yellow'))
+        df_missing = df.copy(deep=True)
+        df_missing = df_missing[df_missing.isnull().any(axis=1)]
+        st.dataframe(data=df_missing.style.highlight_null('yellow'))
 
 
         # Find average of each column and replace missing data with means
@@ -66,7 +67,6 @@ with missing_data:
 
         # TODO: highlight all cells that had their values replaced by a mean
         # df
-
 
         # Print table with highlighted replaced values
 
@@ -131,6 +131,7 @@ if file is not None:
         for col in col_names:
             options = order_options(df, col)
             selected_vals.append(st.pills(col, options, selection_mode="multi", default=None))
+
     # df with only filtered rows:
     df_filtered = df
     for i in range(len(col_names)):
@@ -317,89 +318,17 @@ with probs_and_curves:
 with stats_sum:
     st.header("Descriptive Statistics")
     if file is not None:
+        all_stats = generate_stats(df_all)
+
         st.write("Please choose a column:")
         category = st.pills("Categories", list(df_all), selection_mode="single", key="stats-pills")
-
-        stats = []
-
-        for cat in df_all:
-            stats = []
-            col = df_all[cat]
-            if df_all.dtypes[cat] == int or df_all.dtypes[cat] == float:
-                # mean
-                mean = col.mean()
-                # median
-                median = col.median()
-                # mode
-                mode = float(col.mode().iloc[0])
-                # min
-                min_ = float(col.min())
-                # 25th precentile
-                percentile1 = col.quantile(0.25)
-                # 75th percentile
-                percentile2 = col.quantile(0.75)
-                # max
-                max_ = float(col.max())
-                # range
-                range_ = max_ - min_
-                # std
-                std = col.std()
-                # outliers
-                iqr = percentile2 - percentile1
-                oulier_lower_bound = percentile1 - (1.5 * iqr)
-                oulier_upper_bound = percentile2 + (1.5 * iqr)
-                outliers = []
-                index = []
-                i = 0
-                for num in col:
-                    if (num < oulier_lower_bound or num > oulier_upper_bound) and num not in outliers:
-                        index.append(i)
-                        outliers.append(num)
-                    i += 1
-                outliers = sorted(outliers)
-
-                # variation
-                variation = col.var()
-                # skewness?
-                skewness = col.skew()
-                # kurtosis
-                kurtosis = col.kurtosis()
-
-                stats.append([mean, median, mode, min_, percentile1, percentile2, max_, range_, std, variation, skewness,
-                         kurtosis])
-
-                stats.append([index, outliers])
-
-            # frequencies and percentages
-            unique = find_unique(col)
-            counts = []  # = frequency
-            total = len(col)
-
-            for data in unique:
-                counts.append(0)
-
-            for data in col:
-                index = unique.index(data)
-                counts[index] += 1
-
-            percentages = []
-            for i in counts:
-                percentages.append(i / total)
-
-            percentage_formatted = []
-            for i in percentages:
-                percentage_formatted.append(str(round(i * 100, 3)) + '%')
-
-            stats.append([unique, counts, percentages, percentage_formatted])
-
-            all_stats[df_all.columns.get_loc(cat)] = stats
 
         if category is not None:
             col = df_all[category]
             substats = all_stats[df_all.columns.get_loc(category)]
             if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
-                stats_names = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max", "Range",
-                              "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
+                stats_names = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max",
+                               "Range", "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
 
                 dfStats = pd.DataFrame(data = {'Statistic': stats_names, 'Value': substats[0]})
 
@@ -409,14 +338,13 @@ with stats_sum:
                 df_outliers = pd.DataFrame(data={'Outliers': substats[1][1]}, index=substats[1][0])
                 st.dataframe(df_outliers, hide_index=True)
 
-                stats.append(outliers)
-
             st.write("Frequency and Percentages")
 
             if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
                 df_non_numerical = pd.DataFrame(data = {'Value': substats[2][0], 'Frequency': substats[2][1], 'Percentage': substats[2][3]})
             else:
                 df_non_numerical = pd.DataFrame(data = {'Value': substats[0][0], 'Frequency': substats[0][1], 'Percentage': substats[0][3]})
+
             df_non_numerical = df_non_numerical.sort_values(by=['Value'])
             st.dataframe(df_non_numerical, hide_index=True)
 
@@ -442,13 +370,13 @@ with stats_sum:
                 if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
                     bar_str = str(category) + ":Q"
                     barGraph = alt.Chart(df_count).mark_bar().encode(
-                        x=bar_str,
+                        x=alt.X(bar_str, axis=alt.Axis(tickMinStep=1)),
                         y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
                     )
                 else:
                     bar_str = str(category) + ":N"
                     barGraph = alt.Chart(df_count).mark_bar().encode(
-                        x=bar_str,
+                        x=alt.X(bar_str),
                         y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
                     )
                 st.altair_chart(barGraph)
