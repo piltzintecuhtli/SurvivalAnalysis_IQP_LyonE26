@@ -9,25 +9,29 @@ from lifelines import CoxPHFitter
 from analysisFunctions import *
 
 colors = ["blue", "red", "yellow", "orange", "green", "purple"]
-tabs = ["Missing Data Treatment", "Data Visualization", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model"]
-missing_data, data_vis, stats_sum, probs_and_curves, indiv_predictions, cox_model = st.tabs(tabs)
+tabs = ["Data Upload and Visualization", "Missing Data Treatment", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model", "Log-Rank Test"]
+data_vis, missing_data, stats_sum, probs_and_curves, indiv_predictions, cox_model, lr_test = st.tabs(tabs)
 
 col_names = []
 all_stats = []
 
-with missing_data:
-    st.header("Uploading and Parsing Data")
+with data_vis:
+    st.header("Uploading Data")
 
     file = st.file_uploader("Upload dataset here:", type="csv", accept_multiple_files=False, width="stretch")
 
-    # Data reading :
-    # • Check that a patient appears only once in the data file. Delete duplicate rows for patients with "Event_Observed=0".
+    st.header("Data Visualization")
 
     if file is not None:
         st.write("Uploaded file successfully!")
         st.write("Data:")
         df = pd.read_csv(file)
-        df
+        st.dataframe(df)
+
+with missing_data:
+    # Data reading :
+    # • Check that a patient appears only once in the data file. Delete duplicate rows for patients with "Event_Observed=0".
+    if file is not None:
 
         # choose event and event observed columns
         # dataframe column names
@@ -144,11 +148,7 @@ with probs_and_curves:
     st.header("Kaplan-Meier Analysis")
 
     if file is not None:
-        st.subheader("Filtered Data:")
-        df_filtered
-
         # Survival Analysis with the Kaplan-Meier Method
-        # 4. Compare survival according to a criterion(e.g., sex M / F) by plotting Kaplan - Meier curves for each group
         if not df_filtered.empty:
             kmf = KaplanMeierFitter()
             kmf.fit(df_filtered[event_col], df_filtered[event_observed_col])
@@ -224,14 +224,13 @@ with probs_and_curves:
 
                     line_and_band = line + band
                     line_and_band = line_and_band.properties(
-                        title="Kaplan-Meier Estimate for " + category_km
+                        title="Kaplan-Meier Estimate for " + category_km + ": " + str(category_values[i])
                     ).encode(
                         alt.X().title("Time to Event"),
                         alt.Y().axis(format="%").title("Survival Probability"),
                         color = alt.value(colors[i%len(category_dfss)])
                     )
 
-                    st.write("KM graph for those with a/an " + category_km + " of " + str(category_values[i]))
                     st.altair_chart(line_and_band)
 
                     category_graphs_km.append(line_and_band)
@@ -256,60 +255,64 @@ with probs_and_curves:
 
                 st.altair_chart(all_graphs_km)
                 st.write(legend)
+
+                st.header("Nelson-Aalen (Hazard Function) Estimation")
+                naf = NelsonAalenFitter()
+                naf.fit(df_filtered[event_col], df_filtered[event_observed_col])
+
+                df_naf = naf.cumulative_hazard_.reset_index()
+                df_naf_conf_interval_km = naf.confidence_interval_.reset_index()
+
+                line = alt.Chart(df_naf).mark_line().encode(
+                    x='timeline',
+                    y='NA_estimate'
+                )
+
+                band = alt.Chart(df_naf_conf_interval_km).mark_errorband(
+                    opacity=0.3
+                ).encode(
+                    x='index',
+                    y='NA_estimate_lower_0.95',
+                    y2='NA_estimate_upper_0.95'
+                )
+
+                line_and_band = (line + band).properties(
+                    title="Nelson-Aalen Estimator - Hazard Function"
+                ).encode(
+                    alt.X().title("Time since Start Event (weeks)"),
+                    alt.Y().title("Cumulative Hazard")
+                )
+
+                st.altair_chart(line_and_band)
+
+                st.subheader("Hazard Calculator")
+                # estimated hazard with user input
+                number = st.text_input("Time to estimate: ", placeholder="0")
+                if number is not None:
+                    try:
+                        number = float(number)
+                    except ValueError:
+                        st.write("You have entered a " + str(type(number)) + ". Please enter a number for time.")
+                        number = 0
+
+                else:
+                    number = 0
+                units = st.selectbox("Units: ", ["Months", "Years"])
+
+                if units == "Months":
+                    number = number * 4
+                else:
+                    number = number * 52
+
+                num = naf.cumulative_hazard_at_times(number)
+
+                estimated_time = round(num.iloc[0], 3)
+
+                st.write("Cumulative hazard: " + str(estimated_time))
             else:
                 st.write("Please reselect filters; the current ones return no results!")
         else:
             st.write("Please upload data.")
-
-with data_vis:
-    st.header("Log-Rank Analysis")
-    st.subheader("Compare by Category")
-    # pick a category
-    lr_category = st.pills("Categories", col_names, selection_mode="single", key="lr-pills")
-
-    if lr_category is not None:
-        df_vis = df.copy(deep=True)
-        # get all possible values for the chosen category
-        category_values = find_unique(df_vis[lr_category])
-
-        # filter by category
-        category_dfs = []
-        for value in category_values:
-            filtered_category = df_vis[df_vis[lr_category] == value]
-            category_dfs.append(filtered_category)
-
-        # format data for analysis
-        durations = []
-        events = []
-        group = []
-        for i in range(len(category_dfs)):
-            df = category_dfs[i]
-            survival_times = list(df[event_col])
-            survivalObserved = list(df[event_observed_col])
-            groupNum = i
-
-            for j in range(len(survival_times)):
-                durations.append(survival_times[j])
-                events.append(survivalObserved[j])
-                group.append(groupNum)
-
-        lrdf = pd.DataFrame({
-            'durations': durations,
-            'events': events,
-            'groups': group
-        })
-
-        result = multivariate_logrank_test(lrdf['durations'], lrdf['groups'], lrdf['events'])
-
-        st.write("Test statistic: " + str(round(result.test_statistic, 5)))
-        st.write("p-value: " + str(round(result.p_value, 5)))
-
-        if result.p_value > 0.05:
-            st.write("Null hypothesis is retained; " + lr_category + " does not affect survival time" )
-        else:
-            st.write("Null hypothesis is rejected; " + lr_category + " affect(s) survival time")
-    else:
-        st.write("Please reselect filters; the current ones return no results!")
 
 with stats_sum:
     st.header("Descriptive Statistics")
@@ -449,67 +452,6 @@ with stats_sum:
                         y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
                     )
                 st.altair_chart(barGraph)
-    else:
-        st.write("Please upload a file")
-
-with indiv_predictions:
-    st.header("Nelson-Aalen (Hazard Function) Estimation")
-    if file is not None:
-        if not df_filtered.empty:
-            naf = NelsonAalenFitter()
-            naf.fit(df_filtered[event_col], df_filtered[event_observed_col])
-
-            df_naf = naf.cumulative_hazard_.reset_index()
-            df_naf_conf_interval_km = naf.confidence_interval_.reset_index()
-
-            line = alt.Chart(df_naf).mark_line().encode(
-                x='timeline',
-                y='NA_estimate'
-            )
-
-            band = alt.Chart(df_naf_conf_interval_km).mark_errorband(
-                opacity=0.3
-            ).encode(
-                x='index',
-                y='NA_estimate_lower_0.95',
-                y2='NA_estimate_upper_0.95'
-            )
-
-            line_and_band = (line + band).properties(
-                title="Nelson-Aalen Estimator - Hazard Function"
-            ).encode(
-                alt.X().title("Time since Start Event (weeks)"),
-                alt.Y().title("Cumulative Hazard")
-            )
-
-            st.altair_chart(line_and_band)
-
-            st.subheader("Hazard Calculator")
-            # estimated hazard with user input
-            number = st.text_input("Time to estimate: ", placeholder="0")
-            if number is not None:
-                try:
-                    number = float(number)
-                except ValueError:
-                    st.write("You have entered a " + str(type(number)) + ". Please enter a number for time.")
-                    number = 0
-
-            else:
-                number = 0
-            units = st.selectbox("Units: ", ["Months", "Years"])
-
-            if units == "Months":
-                number = number * 4
-            else:
-                number = number * 52
-
-            num = naf.cumulative_hazard_at_times(number)
-
-            estimated_time = round(num.iloc[0], 3)
-
-            st.write("Cumulative hazard: " + str(estimated_time))
-        else:
-            st.write("Please reselect filters; the current ones return no results!")
     else:
         st.write("Please upload a file")
 
@@ -710,5 +652,59 @@ with cox_model:
 
         else:
             st.write("Please reselect filters; the current ones return no results.")
+    else:
+        st.write("Please upload data.")
+
+with lr_test:
+    st.header("Log-Rank Test")
+    if file is not None:
+        st.header("Log-Rank Analysis")
+        st.subheader("Compare by Category")
+        # pick a category
+        lr_category = st.pills("Categories", col_names, selection_mode="single", key="lr-pills")
+
+        if lr_category is not None:
+            df_vis = df.copy(deep=True)
+            # get all possible values for the chosen category
+            category_values = find_unique(df_vis[lr_category])
+
+            # filter by category
+            category_dfs = []
+            for value in category_values:
+                filtered_category = df_vis[df_vis[lr_category] == value]
+                category_dfs.append(filtered_category)
+
+            # format data for analysis
+            durations = []
+            events = []
+            group = []
+            for i in range(len(category_dfs)):
+                df = category_dfs[i]
+                survival_times = list(df[event_col])
+                survivalObserved = list(df[event_observed_col])
+                groupNum = i
+
+                for j in range(len(survival_times)):
+                    durations.append(survival_times[j])
+                    events.append(survivalObserved[j])
+                    group.append(groupNum)
+
+            lrdf = pd.DataFrame({
+                'durations': durations,
+                'events': events,
+                'groups': group
+            })
+
+            result = multivariate_logrank_test(lrdf['durations'], lrdf['groups'], lrdf['events'])
+
+            st.write("Test statistic: " + str(round(result.test_statistic, 5)))
+            st.write("p-value: " + str(round(result.p_value, 5)))
+
+            if result.p_value > 0.05:
+                st.write("Null hypothesis is retained; " + lr_category + " does not affect survival time")
+            else:
+                st.write("Null hypothesis is rejected; " + lr_category + " affect(s) survival time")
+        else:
+            st.write("Please select a cateogry!")
     else:
         st.write("Please upload data.")
