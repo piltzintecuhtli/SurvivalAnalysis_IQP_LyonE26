@@ -9,8 +9,8 @@ from lifelines import CoxPHFitter
 from analysisFunctions import *
 
 colors = ["blue", "red", "yellow", "orange", "green", "purple"]
-tabs = ["Missing Data Treatment", "Data Visualization", "Descriptive Statistics", "Graphical Representation of Variables", "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model"]
-missing_data, data_vis, desc_stats, graph_rep, probs_and_curves, indiv_predictions, cox_model = st.tabs(tabs)
+tabs = ["Missing Data Treatment", "Data Visualization", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Individual Survival Prediction", "Cox Regression Model"]
+missing_data, data_vis, stats_sum, probs_and_curves, indiv_predictions, cox_model = st.tabs(tabs)
 
 col_names = []
 all_stats = []
@@ -311,11 +311,9 @@ with data_vis:
     else:
         st.write("Please reselect filters; the current ones return no results!")
 
-with desc_stats:
+with stats_sum:
     st.header("Descriptive Statistics")
     if file is not None:
-        st.write("All data:")
-        df_all
         st.write("Please choose a column:")
         category = st.pills("Categories", list(df_all), selection_mode="single", key="stats-pills")
 
@@ -418,48 +416,39 @@ with desc_stats:
                 df_non_numerical = pd.DataFrame(data = {'Value': substats[0][0], 'Frequency': substats[0][1], 'Percentage': substats[0][3]})
             df_non_numerical = df_non_numerical.sort_values(by=['Value'])
             st.dataframe(df_non_numerical, hide_index=True)
-    else:
-        st.write("Please upload a file")
 
-with graph_rep:
-    st.header("Graphical Representation of Variables")
-    if file is not None:
-        st.write("Please choose a column:")
-        category_gr = st.pills("Categories", list(df_all), selection_mode="single", key="graphrep-pills")
+            st.header("Graphical Representation of Variables")
+            if category is not None:
+                substats = all_stats[df_all.columns.get_loc(category)]
+                col = df_all[category]
+                st.subheader("Distribution of Values")
+                if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
+                    # box and whisker plot
+                    st.write("Box Plot Representation")
+                    chart = alt.Chart(df_all).mark_boxplot(extent="min-max").encode(
+                        alt.X(str(category)).scale(zero=False)
+                    )
+                    st.altair_chart(chart, height=40, theme=None)
+                # bar graph
+                st.write("Bar Chart Representation")
+                values = col
+                x, counts = np.unique(values, return_counts=True)
+                df_count = pd.DataFrame({str(category): x, "Count": counts})
+                df_count = df_count.sort_values(by=[str(category)])
 
-        stats = []
-
-        if category_gr is not None:
-            substats = all_stats[df_all.columns.get_loc(category_gr)]
-            col = df_all[category_gr]
-            st.subheader("Distribution of Values")
-            if df_all.dtypes[category_gr] == int or df_all.dtypes[category_gr] == float:
-                # box and whisker plot
-                st.write("Box Plot Representation")
-                chart = alt.Chart(df_all).mark_boxplot(extent="min-max").encode(
-                    alt.X(str(category_gr)).scale(zero=False)
-                )
-                st.altair_chart(chart, height=40, theme=None)
-            # bar graph
-            st.write("Bar Chart Representation")
-            values = col
-            x, counts = np.unique(values, return_counts=True)
-            df_count = pd.DataFrame({str(category_gr): x, "Count": counts})
-            df_count = df_count.sort_values(by=[str(category_gr)])
-
-            if df_all.dtypes[category_gr] == int or df_all.dtypes[category_gr] == float:
-                bar_str = str(category_gr) + ":Q"
-                barGraph = alt.Chart(df_count).mark_bar().encode(
-                    x=bar_str,
-                    y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
-                )
-            else:
-                bar_str = str(category_gr) + ":N"
-                barGraph = alt.Chart(df_count).mark_bar().encode(
-                    x=bar_str,
-                    y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
-                )
-            st.altair_chart(barGraph)
+                if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
+                    bar_str = str(category) + ":Q"
+                    barGraph = alt.Chart(df_count).mark_bar().encode(
+                        x=bar_str,
+                        y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
+                    )
+                else:
+                    bar_str = str(category) + ":N"
+                    barGraph = alt.Chart(df_count).mark_bar().encode(
+                        x=bar_str,
+                        y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
+                    )
+                st.altair_chart(barGraph)
     else:
         st.write("Please upload a file")
 
