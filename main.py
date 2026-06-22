@@ -56,7 +56,6 @@ with missing_data:
         df = df.dropna(subset=[event_col, event_observed_col])
 
         # highlight empty cells
-        # TODO: find empty cells and mark locations in an array
         st.write("Missing data highlighted")
         df_missing = df.copy(deep=True)
         df_missing = df_missing[df_missing.isnull().any(axis=1)]
