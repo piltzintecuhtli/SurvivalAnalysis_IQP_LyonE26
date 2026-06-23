@@ -30,8 +30,6 @@ with data_vis:
         st.dataframe(df)
 
 with missing_data:
-    # Data reading :
-    # • Check that a patient appears only once in the data file. Delete duplicate rows for patients with "Event_Observed=0".
     if file is not None:
         # choose event and event observed columns
         # dataframe column names
@@ -55,6 +53,14 @@ with missing_data:
         # Delete rows with missing event/event observed data
         df = df.dropna(subset=[event_col, event_observed_col])
 
+        # Remove duplicate rows
+        df_censored = df[df[event_observed_col] == 0]
+        df = df[df[event_observed_col] == 1]
+
+        df_censored = df_censored.drop_duplicates()
+
+        df = df.append(df_censored)
+
         # highlight empty cells
         st.write("Missing data highlighted")
         df_missing = df.copy(deep=True)
@@ -64,9 +70,6 @@ with missing_data:
 
         # Find average of each column and replace missing data with means
         df = replace_with_averages(df)
-
-        # TODO: highlight all cells that had their values replaced by a mean
-        # df
 
         # Print table with highlighted replaced values
 
@@ -284,7 +287,7 @@ with probs_and_curves:
         line_and_band = (line + band).properties(
             title="Nelson-Aalen Estimator - Hazard Function"
         ).encode(
-            alt.X().title("Time since Start Event (weeks)"),
+            alt.X().title("Time since Start Event"),
             alt.Y().title("Cumulative Hazard")
         )
 
