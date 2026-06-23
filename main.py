@@ -535,12 +535,12 @@ with coxModel:
             covariates = st.pills("Covariates", colNames, selection_mode="multi", key="cox-covariates")
 
             if covariates:
+                # coxdf uses selected covariates — drives the model
                 coxInputCols = covariates + [eventCol, eventObservedCol]
                 coxdf = filtereddf[coxInputCols].copy(deep=True)
 
                 categoricalCols = coxdf[covariates].select_dtypes(exclude='number').columns.tolist()
 
-                # treat Comorbidities as numeric if present
                 if "Comorbidities" in categoricalCols:
                     coxdf["Comorbidities"] = pd.to_numeric(coxdf["Comorbidities"], errors='coerce')
                     categoricalCols.remove("Comorbidities")
@@ -549,6 +549,18 @@ with coxModel:
                     coxdf = pd.get_dummies(coxdf, columns=categoricalCols, drop_first=True)
 
                 encodedCovariates = [c for c in coxdf.columns if c not in [eventCol, eventObservedCol]]
+
+                # predCoxdf uses ALL colNames columns from filtereddf — drives the prediction
+                predCovariates = [c for c in colNames if c in filtereddf.columns]
+                predInputCols = predCovariates + [eventCol, eventObservedCol]
+                predCoxdf = filtereddf[predInputCols].copy(deep=True)
+
+                predCategoricalCols = predCoxdf[predCovariates].select_dtypes(exclude='number').columns.tolist()
+                if "Comorbidities" in predCategoricalCols:
+                    predCoxdf["Comorbidities"] = pd.to_numeric(predCoxdf["Comorbidities"], errors='coerce')
+                    predCategoricalCols.remove("Comorbidities")
+                if predCategoricalCols:
+                    predCoxdf = pd.get_dummies(predCoxdf, columns=predCategoricalCols, drop_first=True)
 
                 cph = CoxPHFitter()
                 try:
@@ -622,95 +634,87 @@ with coxModel:
 
                     st.altair_chart(baselineLine, width='stretch')
 
-                    # --- Individual Survival Prediction ---
+                    # --- Individual Survival Prediction (sidebar only) ---
                     st.subheader("Individual Survival Prediction")
-                    st.write("Enter covariate values to predict survival for a specific patient profile:")
+                    st.write("Use the sidebar to filter the patient profile. The prediction updates automatically.")
 
-                    formKey = "cox_prediction_form_" + "_".join(encodedCovariates).replace("<", "lt").replace(">", "gt").replace("-", "to").replace(" ", "_")
-                    with st.form(formKey):
+                    try:
+                        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                        # build patient profile from means/modes of predCoxdf (sidebar-driven, all covariates)
+                        # then restrict to only the encodedCovariates the model was trained on
                         patientInput = {}
-                        inputCols = st.columns(int(min(len(encodedCovariates), 3)))
-                        for i, cov in enumerate(encodedCovariates):
-                            with inputCols[i % int(min(len(encodedCovariates), 3))]:
-                                uniqueVals = sorted(coxdf[cov].unique())
-                                if cov == "Comorbidities":
-                                    patientInput[cov] = float(st.selectbox(
-                                        cov, options=[0, 1, 2, 3, 4, 5]
-                                    ))
-                                elif set(uniqueVals).issubset({0, 1, 0.0, 1.0}):
-                                    selection = st.selectbox(cov, options=["No", "Yes"])
-                                    patientInput[cov] = 1.0 if selection == "Yes" else 0.0
+                        for cov in encodedCovariates:
+                            if cov in predCoxdf.columns:
+                                uniqueVals = sorted(predCoxdf[cov].unique())
+                                if set(uniqueVals).issubset({0, 1, 0.0, 1.0}):
+                                    patientInput[cov] = float(predCoxdf[cov].mode().iloc[0])
                                 else:
-                                    patientInput[cov] = st.number_input(
-                                        cov, value=float(coxdf[cov].mean())
-                                    )
-                        submitted = st.form_submit_button("Predict")
-
-                    if submitted:
-                        try:
-                            from concurrent.futures import ThreadPoolExecutor, as_completed
-
-                            patientDf = pd.DataFrame([patientInput])
-                            survivalPred = cph.predict_survival_function(patientDf)
-
-                            predDf = pd.DataFrame({
-                                "timeline": survivalPred.index.astype(float),
-                                "survival": survivalPred.iloc[:, 0].astype(float).values
-                            }).reset_index(drop=True)
-
-                            # bootstrap confidence intervals
-                            nBootstrap = 50
-
-                            def runBootstrap(_):
-                                try:
-                                    sampleDf = coxdf.sample(n=len(coxdf), replace=True)
-                                    cphBoot = CoxPHFitter()
-                                    cphBoot.fit(sampleDf, duration_col=eventCol, event_col=eventObservedCol)
-                                    bootPred = cphBoot.predict_survival_function(patientDf)
-                                    return bootPred.reindex(survivalPred.index).iloc[:, 0].values
-                                except:
-                                    return None
-
-                            bootstrapPreds = []
-                            with ThreadPoolExecutor(max_workers=4) as executor:
-                                futures = [executor.submit(runBootstrap, i) for i in range(nBootstrap)]
-                                for future in as_completed(futures):
-                                    result = future.result()
-                                    if result is not None:
-                                        bootstrapPreds.append(result)
-
-                            if len(bootstrapPreds) > 0:
-                                bootstrapDf = pd.DataFrame(bootstrapPreds)
-                                predDf["lower"] = bootstrapDf.quantile(0.025).values
-                                predDf["upper"] = bootstrapDf.quantile(0.975).values
+                                    patientInput[cov] = float(predCoxdf[cov].mean())
                             else:
-                                predDf["lower"] = predDf["survival"]
-                                predDf["upper"] = predDf["survival"]
+                                patientInput[cov] = 0.0
 
-                            line = alt.Chart(predDf).mark_line(color="green").encode(
-                                x=alt.X("timeline:Q", title="Time to Event"),
-                                y=alt.Y("survival:Q", title="Survival Probability", scale=alt.Scale(domain=[0, 1]))
-                            )
+                        patientDf = pd.DataFrame([patientInput])
+                        survivalPred = cph.predict_survival_function(patientDf)
 
-                            band = alt.Chart(predDf).mark_area(opacity=0.3, color="green").encode(
-                                x=alt.X("timeline:Q", title="Time to Event"),
-                                y=alt.Y("lower:Q", scale=alt.Scale(domain=[0, 1])),
-                                y2=alt.Y2("upper:Q")
-                            )
+                        predDf = pd.DataFrame({
+                            "timeline": survivalPred.index.astype(float),
+                            "survival": survivalPred.iloc[:, 0].astype(float).values
+                        }).reset_index(drop=True)
 
-                            predChart = (band + line).properties(
-                                title="Predicted Survival Curve for Patient Profile with 95% CI"
-                            )
+                        # bootstrap confidence intervals
+                        nBootstrap = 50
 
-                            st.altair_chart(predChart, width='stretch')
+                        def runBootstrap(_):
+                            try:
+                                sampleDf = coxdf.sample(n=len(coxdf), replace=True)
+                                cphBoot = CoxPHFitter()
+                                cphBoot.fit(sampleDf, duration_col=eventCol, event_col=eventObservedCol)
+                                bootPred = cphBoot.predict_survival_function(patientDf)
+                                return bootPred.reindex(survivalPred.index).iloc[:, 0].values
+                            except:
+                                return None
 
-                            medianSurvival = cph.predict_median(patientDf)
-                            if hasattr(medianSurvival, 'iloc'):
-                                medianSurvival = medianSurvival.iloc[0]
-                            st.write("Estimated median survival time: " + str(round(float(medianSurvival), 2)) + " time units")
+                        bootstrapPreds = []
+                        with ThreadPoolExecutor(max_workers=4) as executor:
+                            futures = [executor.submit(runBootstrap, i) for i in range(nBootstrap)]
+                            for future in as_completed(futures):
+                                result = future.result()
+                                if result is not None:
+                                    bootstrapPreds.append(result)
 
-                        except Exception as e:
-                            st.warning("Could not generate prediction for the selected profile. Please try adjusting the covariate values.")
+                        if len(bootstrapPreds) > 0:
+                            bootstrapDf = pd.DataFrame(bootstrapPreds)
+                            predDf["lower"] = bootstrapDf.quantile(0.025).values
+                            predDf["upper"] = bootstrapDf.quantile(0.975).values
+                        else:
+                            predDf["lower"] = predDf["survival"]
+                            predDf["upper"] = predDf["survival"]
+
+                        line = alt.Chart(predDf).mark_line(color="green").encode(
+                            x=alt.X("timeline:Q", title="Time to Event"),
+                            y=alt.Y("survival:Q", title="Survival Probability", scale=alt.Scale(domain=[0, 1]))
+                        )
+
+                        band = alt.Chart(predDf).mark_area(opacity=0.3, color="green").encode(
+                            x=alt.X("timeline:Q", title="Time to Event"),
+                            y=alt.Y("lower:Q", scale=alt.Scale(domain=[0, 1])),
+                            y2=alt.Y2("upper:Q")
+                        )
+
+                        predChart = (band + line).properties(
+                            title="Predicted Survival Curve for Patient Profile with 95% CI"
+                        )
+
+                        st.altair_chart(predChart, width='stretch')
+
+                        medianSurvival = cph.predict_median(patientDf)
+                        if hasattr(medianSurvival, 'iloc'):
+                            medianSurvival = medianSurvival.iloc[0]
+                        st.write("Estimated median survival time: " + str(round(float(medianSurvival), 2)) + " time units")
+
+                    except Exception as e:
+                        st.warning("Could not generate prediction for the selected profile. Please try adjusting the sidebar filters.")
 
                 except Exception as e:
                     st.error("Could not fit Cox model: " + str(e))
