@@ -59,7 +59,7 @@ with missing_data:
 
         df_censored = df_censored.drop_duplicates()
 
-        df = df.append(df_censored)
+        df = pd.concat([df, df_censored])
 
         # highlight empty cells
         st.write("Missing data highlighted")
@@ -70,8 +70,6 @@ with missing_data:
 
         # Find average of each column and replace missing data with means
         df = replace_with_averages(df)
-
-        # Print table with highlighted replaced values
 
         # Ask user for columns to group
         group_cols = select_groupings_with_default(df, ["Age", "BMI"])
@@ -112,7 +110,6 @@ with missing_data:
                 group_cols_indices.append(df.columns.get_loc("BMI"))
                 group_data.append(bmi_group)
                 df_all['BMI_Group'] = bmi_group
-            # TODO: if col is smth else, ask user for range
 
         for _ in df_all:
             all_stats.append(0)
