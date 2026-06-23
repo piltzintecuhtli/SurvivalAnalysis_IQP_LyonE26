@@ -9,8 +9,8 @@ from lifelines import CoxPHFitter
 from analysisFunctions import *
 
 colors = ["blue", "red", "yellow", "orange", "green", "purple"]
-tabs = ["Data Upload and Visualization", "Missing Data Treatment", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Cox Regression Model", "Log-Rank Test"]
-data_vis, missing_data, stats_sum, probs_and_curves, cox_model, lr_test = st.tabs(tabs)
+tabs = ["Data Upload and Visualization", "Missing Data Treatment", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Log-Rank Test", "Cox Regression Model"]
+data_vis, missing_data, stats_sum, probs_and_curves, lr_test, cox_model  = st.tabs(tabs)
 
 col_names = []
 all_stats = []
@@ -71,7 +71,7 @@ with missing_data:
         # Print table with highlighted replaced values
 
         # Ask user for columns to group
-        group_cols = select_groupings_with_default(df, col_names)
+        group_cols = select_groupings_with_default(df, ["Age", "BMI"])
 
         # Add group columns
         group_cols_indices = []
@@ -256,64 +256,61 @@ with probs_and_curves:
 
                 st.altair_chart(all_graphs_km)
                 st.write(legend)
-
-                st.header("Nelson-Aalen (Hazard Function) Estimation")
-                naf = NelsonAalenFitter()
-                naf.fit(df_filtered[event_col], df_filtered[event_observed_col])
-
-                df_naf = naf.cumulative_hazard_.reset_index()
-                df_naf_conf_interval_km = naf.confidence_interval_.reset_index()
-
-                line = alt.Chart(df_naf).mark_line().encode(
-                    x='timeline',
-                    y='NA_estimate'
-                )
-
-                band = alt.Chart(df_naf_conf_interval_km).mark_errorband(
-                    opacity=0.3
-                ).encode(
-                    x='index',
-                    y='NA_estimate_lower_0.95',
-                    y2='NA_estimate_upper_0.95'
-                )
-
-                line_and_band = (line + band).properties(
-                    title="Nelson-Aalen Estimator - Hazard Function"
-                ).encode(
-                    alt.X().title("Time since Start Event (weeks)"),
-                    alt.Y().title("Cumulative Hazard")
-                )
-
-                st.altair_chart(line_and_band)
-
-                st.subheader("Hazard Calculator")
-                # estimated hazard with user input
-                number = st.text_input("Time to estimate: ", placeholder="0")
-                if number is not None:
-                    try:
-                        number = float(number)
-                    except ValueError:
-                        st.write("You have entered a " + str(type(number)) + ". Please enter a number for time.")
-                        number = 0
-
-                else:
-                    number = 0
-                units = st.selectbox("Units: ", ["Months", "Years"])
-
-                if units == "Months":
-                    number = number * 4
-                else:
-                    number = number * 52
-
-                num = naf.cumulative_hazard_at_times(number)
-
-                estimated_time = round(num.iloc[0], 3)
-
-                st.write("Cumulative hazard: " + str(estimated_time))
             else:
-                st.write("Please reselect filters; the current ones return no results!")
+                st.write("Please choose a category")
         else:
-            st.write("Please upload data.")
+            st.write("Please reselect filters; the current ones return no results!")
+
+        st.header("Nelson-Aalen (Hazard Function) Estimation")
+        naf = NelsonAalenFitter()
+        naf.fit(df_filtered[event_col], df_filtered[event_observed_col])
+
+        df_naf = naf.cumulative_hazard_.reset_index()
+        df_naf_conf_interval_km = naf.confidence_interval_.reset_index()
+
+        line = alt.Chart(df_naf).mark_line().encode(
+            x='timeline',
+            y='NA_estimate'
+        )
+
+        band = alt.Chart(df_naf_conf_interval_km).mark_errorband(
+            opacity=0.3
+        ).encode(
+            x='index',
+            y='NA_estimate_lower_0.95',
+            y2='NA_estimate_upper_0.95'
+        )
+
+        line_and_band = (line + band).properties(
+            title="Nelson-Aalen Estimator - Hazard Function"
+        ).encode(
+            alt.X().title("Time since Start Event (weeks)"),
+            alt.Y().title("Cumulative Hazard")
+        )
+
+        st.altair_chart(line_and_band)
+
+        st.subheader("Hazard Calculator")
+        # estimated hazard with user input
+        st.write("Note: meaningful values will be in the range [0, " + str(round(max(df[event_col]), 2)) + "]")
+        number = st.text_input("Time to estimate: ", placeholder="0")
+        if number is not None:
+            try:
+                number = float(number)
+            except ValueError:
+                st.write("You have entered a " + str(type(number)) + ". Please enter a number for time.")
+                number = 0
+
+        else:
+            number = 0
+
+        num = naf.cumulative_hazard_at_times(number)
+
+        estimated_time = round(num.iloc[0], 3)
+
+        st.write("Cumulative hazard: " + str(estimated_time))
+    else:
+        st.write("Please upload data.")
 
 with stats_sum:
     st.header("Descriptive Statistics")
