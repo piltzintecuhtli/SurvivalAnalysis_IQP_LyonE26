@@ -193,16 +193,16 @@ with probs_and_curves:
                 category_values = find_unique(df[category_km])
 
                 # filter by category
-                category_dfss = []
+                category_dfs_km = []
                 for value in category_values:
                     filtered_category = df[df[category_km] == value]
-                    category_dfss.append(filtered_category)
+                    category_dfs_km.append(filtered_category)
 
 
                 # make graphs for all the mini dataframes
                 category_graphs_km = []
-                for i in range(len(category_dfss)):
-                    df = category_dfss[i]
+                for i in range(len(category_dfs_km)):
+                    df = category_dfs_km[i]
                     kmf = KaplanMeierFitter()
                     kmf.fit(df[event_col], df[event_observed_col])
 
@@ -229,7 +229,7 @@ with probs_and_curves:
                     ).encode(
                         alt.X().title("Time to Event"),
                         alt.Y().axis(format="%").title("Survival Probability"),
-                        color = alt.value(colors[i%len(category_dfss)])
+                        color = alt.value(colors[i%len(category_dfs_km)])
                     )
 
                     st.altair_chart(line_and_band)
