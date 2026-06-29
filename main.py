@@ -184,6 +184,26 @@ with probs_and_curves:
             st.subheader("Table of Survivor Proportions")
             st.write(kmf.survival_function_)
 
+            st.subheader("Kaplan-Meier Calculator")
+            # estimated hazard with user input
+            st.write("Note: meaningful values will be in the range [0, " + str(round(max(df[event_col]), 2)) + "]")
+            number_km = st.text_input("Time to estimate: ", placeholder="0", key="km_calculator_input")
+            if number_km is not None:
+                try:
+                    number_km = float(number_km)
+                except ValueError:
+                    st.write("You have entered a " + str(type(number_km)) + ". Please enter a number for time.")
+                    number_km = 0
+
+            else:
+                number_km = 0
+
+            num = kmf.survival_function_at_times(number_km)
+
+            estimated_time_km = round(num.iloc[0], 3)
+
+            st.write("Probability of survival: " + str(estimated_time_km * 100) + "%")
+
             st.subheader("Compare by Category")
             # pick a category
             category_km = st.pills("Categories", col_names, selection_mode="single", key="km-pills")
