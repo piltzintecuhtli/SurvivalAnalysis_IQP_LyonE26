@@ -41,14 +41,11 @@ def select_with_default(df, col_names, col_name):
     return event_col
 
 def replace_with_averages(df):
-    averages = []
-
     for col in df:
-        if df[col].dtypes is float or df[col].dtypes is int:
+        if df[col].dtypes == float or df[col].dtypes == int:
             avg = df[col].mean()
         else:
             avg = find_mode(df[col])
-        averages.append(avg)
         df[col] = df[col].replace(np.nan, avg)
 
     return df

@@ -72,9 +72,6 @@ with missing_data:
         df_missing = df_missing[df_missing.isnull().any(axis=1)]
         st.dataframe(data=df_missing.style.highlight_null('yellow'))
 
-
-        # TODO: ERROR HERE
-        # TODO: TRY HAVING A LOT OF VARIABLES
         # Find average of each column and replace missing data with means
         df = replace_with_averages(df)
 
