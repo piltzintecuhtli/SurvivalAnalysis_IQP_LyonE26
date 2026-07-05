@@ -13,6 +13,8 @@ colors = ["blue", "red", "yellow", "orange", "green", "purple"]
 tabs = ["Data Upload and Visualization", "Missing Data Treatment", "Summary of Statistics",  "Survival Probabilities and Survival Curves", "Cox Regression Model", "Log-Rank Test"]
 data_vis, missing_data, stats_sum, probs_and_curves, cox_model, lr_test  = st.tabs(tabs)
 
+error_message = "Please ensure your time-to-event and event observed columns are set properly!"
+
 col_names = []
 all_stats = []
 
@@ -66,14 +68,19 @@ with missing_data:
 
         df = pd.concat([df, df_censored])
 
-        # highlight empty cells
-        st.write("Missing data highlighted")
         df_missing = df.copy(deep=True)
-        df_missing = df_missing[df_missing.isnull().any(axis=1)]
-        st.dataframe(data=df_missing.style.highlight_null('yellow'))
 
         # Find average of each column and replace missing data with means
-        df = replace_with_averages(df)
+        try:
+            df = replace_with_averages(df)
+        except IndexError:
+            st.write(error_message)
+
+        # highlight empty cells
+        st.write("Missing data highlighted")
+
+        df_missing = df_missing[df_missing.isnull().any(axis=1)]
+        st.dataframe(data=df_missing.style.highlight_null('yellow'))
 
         # Ask user for columns to group
         group_cols = select_groupings_with_default(df, ["Age", "BMI"])
@@ -290,120 +297,125 @@ with probs_and_curves:
 
         st.header("Nelson-Aalen (Hazard Function) Estimation")
         naf = NelsonAalenFitter()
-        naf.fit(df_filtered[event_col], df_filtered[event_observed_col])
+        try:
+            naf.fit(df_filtered[event_col], df_filtered[event_observed_col])
+            df_naf = naf.cumulative_hazard_.reset_index()
+            df_naf_conf_interval_km = naf.confidence_interval_.reset_index()
 
-        df_naf = naf.cumulative_hazard_.reset_index()
-        df_naf_conf_interval_km = naf.confidence_interval_.reset_index()
+            line = alt.Chart(df_naf).mark_line().encode(
+                x='timeline',
+                y='NA_estimate'
+            )
 
-        line = alt.Chart(df_naf).mark_line().encode(
-            x='timeline',
-            y='NA_estimate'
-        )
+            band = alt.Chart(df_naf_conf_interval_km).mark_errorband(
+                opacity=0.3
+            ).encode(
+                x='index',
+                y='NA_estimate_lower_0.95',
+                y2='NA_estimate_upper_0.95'
+            )
 
-        band = alt.Chart(df_naf_conf_interval_km).mark_errorband(
-            opacity=0.3
-        ).encode(
-            x='index',
-            y='NA_estimate_lower_0.95',
-            y2='NA_estimate_upper_0.95'
-        )
+            line_and_band = (line + band).properties(
+                title="Nelson-Aalen Estimator - Hazard Function"
+            ).encode(
+                alt.X().title("Time since Start Event"),
+                alt.Y().title("Cumulative Hazard")
+            )
 
-        line_and_band = (line + band).properties(
-            title="Nelson-Aalen Estimator - Hazard Function"
-        ).encode(
-            alt.X().title("Time since Start Event"),
-            alt.Y().title("Cumulative Hazard")
-        )
+            st.altair_chart(line_and_band)
 
-        st.altair_chart(line_and_band)
+            st.subheader("Hazard Calculator")
+            # estimated hazard with user input
+            st.write("Note: meaningful values will be in the range [0, " + str(round(max(df[event_col]), 2)) + "]")
+            number = st.text_input("Time to estimate: ", placeholder="0")
+            if number is not None:
+                try:
+                    number = float(number)
+                except ValueError:
+                    st.write("You have entered a " + str(type(number)) + ". Please enter a number for time.")
+                    number = 0
 
-        st.subheader("Hazard Calculator")
-        # estimated hazard with user input
-        st.write("Note: meaningful values will be in the range [0, " + str(round(max(df[event_col]), 2)) + "]")
-        number = st.text_input("Time to estimate: ", placeholder="0")
-        if number is not None:
-            try:
-                number = float(number)
-            except ValueError:
-                st.write("You have entered a " + str(type(number)) + ". Please enter a number for time.")
+            else:
                 number = 0
 
-        else:
-            number = 0
+            num = naf.cumulative_hazard_at_times(number)
 
-        num = naf.cumulative_hazard_at_times(number)
+            estimated_time = round(num.iloc[0], 3)
 
-        estimated_time = round(num.iloc[0], 3)
-
-        st.write("Cumulative hazard: " + str(estimated_time))
+            st.write("Cumulative hazard: " + str(estimated_time))
+        except ValueError:
+            st.write(error_message)
     else:
         st.write("Please upload data.")
 
 with stats_sum:
     st.header("Descriptive Statistics")
     if file is not None:
-        all_stats = generate_stats(df_all)
+        try:
+            all_stats = generate_stats(df_all)
 
-        st.write("Please choose a column:")
-        category = st.pills("Categories", list(df_all), selection_mode="single", key="stats-pills")
+            st.write("Please choose a column:")
+            category = st.pills("Categories", list(df_all), selection_mode="single", key="stats-pills")
 
-        if category is not None:
-            col = df_all[category]
-            substats = all_stats[df_all.columns.get_loc(category)]
-            if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
-                stats_names = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max",
-                               "Range", "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
-
-                dfStats = pd.DataFrame(data = {'Statistic': stats_names, 'Value': substats[0]})
-
-                st.dataframe(dfStats, hide_index=True, height=((len(stats_names) + 1) * 35 + 3))
-
-                st.write("Outliers: ")
-                df_outliers = pd.DataFrame(data={'Outliers': substats[1][1]}, index=substats[1][0])
-                st.dataframe(df_outliers, hide_index=True)
-
-            st.write("Frequency and Percentages")
-
-            if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
-                df_non_numerical = pd.DataFrame(data = {'Value': substats[2][0], 'Frequency': substats[2][1], 'Percentage': substats[2][3]})
-            else:
-                df_non_numerical = pd.DataFrame(data = {'Value': substats[0][0], 'Frequency': substats[0][1], 'Percentage': substats[0][3]})
-
-            df_non_numerical = df_non_numerical.sort_values(by=['Value'])
-            st.dataframe(df_non_numerical, hide_index=True)
-
-            st.header("Graphical Representation of Variables")
             if category is not None:
-                substats = all_stats[df_all.columns.get_loc(category)]
                 col = df_all[category]
-                st.subheader("Distribution of Values")
+                substats = all_stats[df_all.columns.get_loc(category)]
                 if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
-                    # box and whisker plot
-                    st.write("Box Plot Representation")
-                    chart = alt.Chart(df_all).mark_boxplot(extent="min-max").encode(
-                        alt.X(str(category)).scale(zero=False)
-                    )
-                    st.altair_chart(chart, height=40, theme=None)
-                # bar graph
-                st.write("Bar Chart Representation")
-                values = col
-                x, counts = np.unique(values, return_counts=True)
-                df_count = pd.DataFrame({str(category): x, "Count": counts})
-                df_count = df_count.sort_values(by=[str(category)])
+                    stats_names = ["Mean", "Median", "Mode", "Min", "25th percentile", "75th percentile", "Max",
+                                   "Range", "Standard Deviation", "Variation", "Skewness", "Kurtosis"]
+
+                    dfStats = pd.DataFrame(data = {'Statistic': stats_names, 'Value': substats[0]})
+
+                    st.dataframe(dfStats, hide_index=True, height=((len(stats_names) + 1) * 35 + 3))
+
+                    st.write("Outliers: ")
+                    df_outliers = pd.DataFrame(data={'Outliers': substats[1][1]}, index=substats[1][0])
+                    st.dataframe(df_outliers, hide_index=True)
+
+                st.write("Frequency and Percentages")
 
                 if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
-                    bar_str = str(category) + ":Q"
-                    barGraph = alt.Chart(df_count).mark_bar().encode(
-                        x=alt.X(bar_str, axis=alt.Axis(tickMinStep=1)),
-                        y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
-                    )
+                    df_non_numerical = pd.DataFrame(data = {'Value': substats[2][0], 'Frequency': substats[2][1], 'Percentage': substats[2][3]})
                 else:
-                    bar_str = str(category) + ":N"
-                    barGraph = alt.Chart(df_count).mark_bar().encode(
-                        x=alt.X(bar_str),
-                        y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
-                    )
-                st.altair_chart(barGraph)
+                    df_non_numerical = pd.DataFrame(data = {'Value': substats[0][0], 'Frequency': substats[0][1], 'Percentage': substats[0][3]})
+
+                df_non_numerical = df_non_numerical.sort_values(by=['Value'])
+                st.dataframe(df_non_numerical, hide_index=True)
+
+                st.header("Graphical Representation of Variables")
+                if category is not None:
+                    substats = all_stats[df_all.columns.get_loc(category)]
+                    col = df_all[category]
+                    st.subheader("Distribution of Values")
+                    if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
+                        # box and whisker plot
+                        st.write("Box Plot Representation")
+                        chart = alt.Chart(df_all).mark_boxplot(extent="min-max").encode(
+                            alt.X(str(category)).scale(zero=False)
+                        )
+                        st.altair_chart(chart, height=40, theme=None)
+                    # bar graph
+                    st.write("Bar Chart Representation")
+                    values = col
+                    x, counts = np.unique(values, return_counts=True)
+                    df_count = pd.DataFrame({str(category): x, "Count": counts})
+                    df_count = df_count.sort_values(by=[str(category)])
+
+                    if df_all.dtypes[category] == int or df_all.dtypes[category] == float:
+                        bar_str = str(category) + ":Q"
+                        barGraph = alt.Chart(df_count).mark_bar().encode(
+                            x=alt.X(bar_str, axis=alt.Axis(tickMinStep=1)),
+                            y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
+                        )
+                    else:
+                        bar_str = str(category) + ":N"
+                        barGraph = alt.Chart(df_count).mark_bar().encode(
+                            x=alt.X(bar_str),
+                            y=alt.Y('Count:Q', axis=alt.Axis(tickMinStep=1))
+                        )
+                    st.altair_chart(barGraph)
+        except IndexError:
+            st.write(error_message)
     else:
         st.write("Please upload a file")
 
@@ -412,7 +424,6 @@ with cox_model:
 
     if file is not None:
         if not df_filtered.empty:
-
             st.subheader("Model Configuration")
             st.write("Select covariates to include in the Cox model")
             covariates = st.pills("Covariates", col_names, selection_mode="multi", key="cox-covariates")
@@ -429,8 +440,7 @@ with cox_model:
                     coxdf["Comorbidities"] = pd.to_numeric(coxdf["Comorbidities"], errors='coerce')
                     categorical_cols.remove("Comorbidities")
 
-                if categorical_cols:
-                    df_cox = pd.get_dummies(coxdf, columns=categorical_cols, drop_first=True)
+                df_cox = pd.get_dummies(coxdf, columns=categorical_cols, drop_first=True)
 
                 encoded_covariates = [c for c in df_cox.columns if c not in [event_col, event_observed_col]]
 
