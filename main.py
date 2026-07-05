@@ -25,6 +25,7 @@ with data_vis:
     if file is not None:
         st.write("Uploaded file successfully!")
         st.write("Data:")
+        # TODO: ERROR TOKENIZING DATA
         df = pd.read_csv(file)
         df_filtered = df.copy(deep=True)
         st.dataframe(df)
@@ -68,6 +69,8 @@ with missing_data:
         st.dataframe(data=df_missing.style.highlight_null('yellow'))
 
 
+        # TODO: ERROR HERE
+        # TODO: TRY HAVING A LOT OF VARIABLES
         # Find average of each column and replace missing data with means
         df = replace_with_averages(df)
 
@@ -82,31 +85,33 @@ with missing_data:
         for col in group_cols:
             # if col is age, do age things
             if col == "Age":
+                bins_age = pd.qcut(x=df[col], q=3, retbins=True, precision=1)
                 age_group = []
                 group_names.append("Age_Group")
                 col_names.remove("Age")
                 for item in df[col]:
-                    if item < 50:
-                        age_group.append("<50")
-                    elif 50 <= item <= 60:
-                        age_group.append("50-60")
-                    elif item > 60:
-                        age_group.append(">60")
+                    if item < bins_age[1][1]:
+                        age_group.append("<" + str(round(bins_age[1][1], 2)))
+                    elif bins_age[1][1] <= item <= bins_age[1][2]:
+                        age_group.append(str(round(bins_age[1][1], 2)) + "-" + str(round(bins_age[1][2], 2)))
+                    elif item > bins_age[1][2]:
+                        age_group.append(">" + str(round(bins_age[1][2], 2)))
                 group_cols_indices.append(df.columns.get_loc("Age"))
                 group_data.append(age_group)
                 df_all['Age_Group'] = age_group
             # if col is BMI, do BMI things
             if col == "BMI":
+                bins_bmi = pd.qcut(x=df[col], q=3, retbins=True, precision=1)
                 bmi_group = []
                 group_names.append("BMI_Group")
                 col_names.remove("BMI")
                 for item in df[col]:
-                    if item < 18:
-                        bmi_group.append("<18")
-                    elif 18 <= item <= 26:
-                        bmi_group.append("18-26")
-                    elif item > 26:
-                        bmi_group.append(">26")
+                    if item < bins_bmi[1][1]:
+                        bmi_group.append("<" + str(round(bins_bmi[1][1], 2)))
+                    elif bins_bmi[1][1] <= item <= bins_bmi[1][2]:
+                        bmi_group.append(str(round(bins_bmi[1][1], 2)) + "-" + str(round(bins_bmi[1][2], 2)))
+                    elif item > bins_bmi[1][2]:
+                        bmi_group.append(">" + str(round(bins_bmi[1][2], 2)))
                 group_cols_indices.append(df.columns.get_loc("BMI"))
                 group_data.append(bmi_group)
                 df_all['BMI_Group'] = bmi_group
@@ -124,6 +129,7 @@ with missing_data:
 
         df
 
+# TODO: LOOK AT WHAT A LOT OF VARIABLES LOOKS LIKE
 selected_vals = []
 if file is not None:
     with st.sidebar:
