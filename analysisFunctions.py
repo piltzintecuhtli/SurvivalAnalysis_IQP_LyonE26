@@ -1,7 +1,5 @@
 import numpy as np
 import streamlit as st
-from lifelines import KaplanMeierFitter
-import altair as alt
 
 def find_mode(col):
     values = []

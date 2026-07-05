@@ -5,6 +5,7 @@ from lifelines import NelsonAalenFitter
 import altair as alt
 from lifelines.statistics import multivariate_logrank_test
 from lifelines import CoxPHFitter
+from pandas.errors import ParserError
 
 from analysisFunctions import *
 
@@ -25,8 +26,11 @@ with data_vis:
     if file is not None:
         st.write("Uploaded file successfully!")
         st.write("Data:")
-        # TODO: ERROR TOKENIZING DATA
-        df = pd.read_csv(file)
+        try:
+            df = pd.read_csv(file, on_bad_lines='warn', sep=None, engine='python')
+        except ParserError:
+            st.write("It seems like your file could not be uploaded. Please ensure your file is encoded using UTF-8 and values are separated with commas.")
+
         df_filtered = df.copy(deep=True)
         st.dataframe(df)
 
