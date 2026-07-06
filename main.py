@@ -137,7 +137,6 @@ with missing_data:
 
         df
 
-# TODO: LOOK AT WHAT A LOT OF VARIABLES LOOKS LIKE
 selected_vals = []
 if file is not None:
     with st.sidebar:

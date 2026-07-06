@@ -2,6 +2,11 @@ import numpy as np
 import streamlit as st
 
 def find_mode(col):
+    """
+    Finds the first mode of the data
+    :param col: an iterable object to find the mode of
+    :return: the first mode in col
+    """
     values = []
     values_count = []
     for value in col:
@@ -19,6 +24,11 @@ def find_mode(col):
     return values[modeIndex]
 
 def find_unique(col):
+    """
+    Finds all unique values in data, ignoring None and NaN values
+    :param col: an iterable object
+    :return: a list of all unique values in col
+    """
     vals = []
     for value in col:
         if value not in vals and (value is not None or value is not np.nan):
@@ -26,6 +36,13 @@ def find_unique(col):
     return vals
 
 def select_with_default(df, col_names, col_name):
+    """
+    Creates a selectbox with any applicable autofill items
+    :param df: a DataFrame with columns, from which the autofill items derive
+    :param col_names: a list of all possible options for the selectbox to contain
+    :param col_name: the column name to autofill the selectboc with, if the column name is in df
+    :return: the selectbox object
+    """
     has_col = False
 
     for col in df:
@@ -41,6 +58,11 @@ def select_with_default(df, col_names, col_name):
     return event_col
 
 def replace_with_averages(df):
+    """
+    Replaces all empty cells in a DataFrame with the mean (for numerical values) or first mode (for non-numerical values) of its column.
+    :param df: the DataFrame
+    :return: df with empty cells
+    """
     for col in df:
         if df[col].dtypes == float or df[col].dtypes == int:
             avg = df[col].mean()
@@ -51,6 +73,12 @@ def replace_with_averages(df):
     return df
 
 def select_groupings_with_default(df, col_names):
+    """
+    Creates a multiselect dropdown with any applicable autofills (out of “Age” and “BMI”)
+    :param df: the DataFrame with columns that may or may not have columns specified by col_names to autofill the dropdown.
+    :param col_names: a list of Strings representing potential column names in df that the dropdown should autofill with, if those columns exist.
+    :return: A multiselect object autofilled with columns “Age” and “BMI,” if they are in col_names and if they are present in df.
+    """
     st.write("Choose columns to group:")
 
     add_indices = []
@@ -77,6 +105,12 @@ def select_groupings_with_default(df, col_names):
     return group_cols
 
 def order_options(df, col):
+    """
+    Sorts the unique values of a column
+    :param df: the DataFrame to get values from
+    :param col: a String representing the name of a column in the DataFrame to sort
+    :return: A sorted list of the unique values from the specified DataFrame column.
+    """
     options = find_unique(df[col])
     match col:
         case "Age_Group":
@@ -91,6 +125,24 @@ def order_options(df, col):
     return options
 
 def generate_stats(df):
+    """
+    Generates descriptive statistics for a DataFrame
+    :param df: the DataFrame to generate statistics on
+    :return: A multi-dimensional list containing the descriptive statistics of all columns in df. Each list item is organized as so:
+Numerical columns:
+[
+[mean, median, mode, min, 25th percentile, 75th percentile, max, range, std, variation, skewness, kurtosis],
+[[indicies from 0 to the number of outliers - 1], [outliers]],
+[[unique values], [counts of each unique value], [percentages], [percentages
+formatted]]
+]
+Non-numerical columns:
+[
+[[unique values], [counts of each unique value], [percentages], [percentages
+formatted]]
+]
+
+    """
     all_stats = []
     
     for _ in df:
